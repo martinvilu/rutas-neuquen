@@ -431,12 +431,28 @@ function updateStats(tramosFiltrados) {
 }
 
 /**
- * Actualiza fecha/hora del reporte.
+ * Actualiza fecha/hora del reporte en el encabezado.
  */
 function updateLastUpdated(tramos) {
   const el = document.getElementById('last-updated');
   if (!el || tramos.length === 0) return;
-  el.textContent = `Actualizado: Neuquén y Río Negro (${tramos.length} tramos cargados)`;
+
+  const dpvItem = tramos.find(t => t.Fuente === 'DPV Neuquén' && t.Fecha);
+  const vnItem = tramos.find(t => t.Fuente === 'Vialidad Nacional' && t.Fecha);
+
+  const dpvText = dpvItem ? `DPV Neuquén: ${dpvItem.Fecha} ${dpvItem.Hora}` : '';
+  const vnText = vnItem ? `Vialidad Nacional: ${vnItem.Fecha} ${vnItem.Hora}` : '';
+
+  if (dpvText && vnText) {
+    el.textContent = `Última actualización: ${dpvText} | ${vnText}`;
+  } else if (dpvText) {
+    el.textContent = `Última actualización: ${dpvText}`;
+  } else if (vnText) {
+    el.textContent = `Última actualización: ${vnText}`;
+  } else {
+    const first = tramos[0];
+    el.textContent = `Última actualización: ${first.Fecha || 'Hoy'} ${first.Hora || ''}`;
+  }
 }
 
 /**
