@@ -1,11 +1,10 @@
-import json, csv, math, re, os
+import json, csv, re, os
 
-print("Ejecutando script de georreferenciación de segmentos...")
+print("Ejecutando script de georreferenciación limpia de segmentos...")
 
-# Base directories
 os.makedirs('data', exist_ok=True)
 
-# Load OSM routes
+# 1. Cargar trazas físicas reales de OSM desde data/routes.geojson o neuquen_routes.geojson
 osm_data = {}
 if os.path.exists('data/routes.geojson'):
     with open('data/routes.geojson', encoding='utf-8') as f:
@@ -14,13 +13,13 @@ elif os.path.exists('data/neuquen_routes.geojson'):
     with open('data/neuquen_routes.geojson', encoding='utf-8') as f:
         osm_data = json.load(f)
 
-# Load DPV Neuquén tramos
+# 2. Cargar reportes de DPV Neuquén
 dpv_tramos = []
 if os.path.exists('data/ParteDiario.csv'):
     with open('data/ParteDiario.csv', encoding='utf-8-sig', errors='ignore') as f:
         dpv_tramos = list(csv.DictReader(f))
 
-# Load Vialidad Nacional tramos
+# 3. Cargar reportes de Vialidad Nacional
 vn_rows = []
 if os.path.exists('data/vialidad_nacional.json'):
     try:
@@ -30,7 +29,7 @@ if os.path.exists('data/vialidad_nacional.json'):
     except Exception as e:
         print("Error leyendo vialidad_nacional.json:", e)
 
-# Georeferenced Nodes
+# Diccionario de coordenadas de nodos principales (lon, lat)
 nodes = {
     'NEUQUEN': [-68.0591, -38.9516],
     'CENTENARIO': [-68.1328, -38.8315],
@@ -127,67 +126,28 @@ def dist_sq(p1, p2):
 def norm_key(s):
     return re.sub(r'[^A-Z0-9]', '', str(s).upper())
 
-osm_by_key = {}
-for feat in osm_data.get('features', []):
-    ref = feat.get('properties', {}).get('ref', '')
-    name = feat.get('properties', {}).get('name', '')
-    for text in [ref, name]:
-        if text:
-            for part in text.split(';'):
-                k = norm_key(part)
-                if k:
-                    osm_by_key.setdefault(k, []).append(feat)
+# Indexar tramos por clave de ruta
+segments_by_route = {}
 
-segment_features = []
-
-# Process DPV Neuquén
 for tramo in dpv_tramos:
     codigo = f"DPV-{tramo.get('CodigoTramo')}"
     num = tramo.get('RutaNumero')
     prov = tramo.get('RutaProvincial')
     prefix = 'RP' if prov == '1' else 'RN'
-    route_key = norm_key(f'{prefix}{num}')
+    rkey = norm_key(f'{prefix}{num}')
     name_str = tramo.get('RutaTramo', '')
 
-    matched_nodes = []
+    pts = []
     for k, coords in nodes.items():
         if k in name_str.upper():
-            matched_nodes.append((k, coords))
+            pts.append((k, coords))
+    
+    segments_by_route.setdefault(rkey, []).append({
+        'codigo': codigo,
+        'tramo': name_str,
+        'nodes': pts
+    })
 
-    line_coords = []
-    osm_feats = osm_by_key.get(route_key, [])
-    if len(matched_nodes) >= 2 and len(osm_feats) > 0:
-        all_pts = []
-        for f in osm_feats:
-            geom = f.get('geometry', {})
-            if geom.get('type') == 'LineString':
-                all_pts.extend(geom.get('coordinates', []))
-        if len(all_pts) >= 2:
-            start_coord = matched_nodes[0][1]
-            end_coord = matched_nodes[-1][1]
-            idx_start = min(range(len(all_pts)), key=lambda i: dist_sq(all_pts[i], start_coord))
-            idx_end = min(range(len(all_pts)), key=lambda i: dist_sq(all_pts[i], end_coord))
-            if idx_start > idx_end:
-                idx_start, idx_end = idx_end, idx_start
-            sliced = all_pts[idx_start:idx_end+1]
-            if len(sliced) >= 2:
-                line_coords = sliced
-
-    if len(line_coords) < 2 and len(matched_nodes) >= 2:
-        line_coords = [p[1] for p in matched_nodes]
-    if len(line_coords) < 2 and len(osm_feats) > 0:
-        geom = osm_feats[0].get('geometry', {})
-        if geom.get('type') == 'LineString':
-            line_coords = geom.get('coordinates', [])
-
-    if len(line_coords) >= 2:
-        segment_features.append({
-            'type': 'Feature',
-            'geometry': {'type': 'LineString', 'coordinates': line_coords},
-            'properties': {'codigo': codigo, 'rutaKey': route_key, 'tramo': name_str}
-        })
-
-# Process Vialidad Nacional
 vn_counter = 1000
 for r in vn_rows:
     if not r or len(r) < 3: continue
@@ -195,48 +155,89 @@ for r in vn_rows:
     vn_counter += 1
     rutaNum = (r[1] if len(r) > 1 else '').strip()
     name_str = (r[2] if len(r) > 2 else '').strip()
-    route_key = norm_key(f'RN{rutaNum}')
+    rkey = norm_key(f'RN{rutaNum}')
 
-    matched_nodes = []
+    pts = []
     for k, coords in nodes.items():
         if k in name_str.upper():
-            matched_nodes.append((k, coords))
+            pts.append((k, coords))
+    
+    segments_by_route.setdefault(rkey, []).append({
+        'codigo': codigo,
+        'tramo': name_str,
+        'nodes': pts
+    })
 
-    line_coords = []
-    osm_feats = osm_by_key.get(route_key, [])
-    if len(matched_nodes) >= 2 and len(osm_feats) > 0:
-        all_pts = []
-        for f in osm_feats:
-            geom = f.get('geometry', {})
-            if geom.get('type') == 'LineString':
-                all_pts.extend(geom.get('coordinates', []))
-        if len(all_pts) >= 2:
-            start_coord = matched_nodes[0][1]
-            end_coord = matched_nodes[-1][1]
-            idx_start = min(range(len(all_pts)), key=lambda i: dist_sq(all_pts[i], start_coord))
-            idx_end = min(range(len(all_pts)), key=lambda i: dist_sq(all_pts[i], end_coord))
-            if idx_start > idx_end:
-                idx_start, idx_end = idx_end, idx_start
-            sliced = all_pts[idx_start:idx_end+1]
-            if len(sliced) >= 2:
-                line_coords = sliced
+# Procesar cada LineString real de OSM sin concatenar puntos lejanos
+clean_features = []
+matched_count = 0
 
-    if len(line_coords) < 2 and len(matched_nodes) >= 2:
-        line_coords = [p[1] for p in matched_nodes]
-    if len(line_coords) < 2 and len(osm_feats) > 0:
-        geom = osm_feats[0].get('geometry', {})
-        if geom.get('type') == 'LineString':
-            line_coords = geom.get('coordinates', [])
+for feat in osm_data.get('features', []):
+    geom = feat.get('geometry', {})
+    if geom.get('type') != 'LineString':
+        continue
+    
+    coords = geom.get('coordinates', [])
+    if len(coords) < 2:
+        continue
+    
+    mid_idx = len(coords) // 2
+    mid_pt = coords[mid_idx]
+    
+    ref = feat.get('properties', {}).get('ref', '')
+    name = feat.get('properties', {}).get('name', '')
 
-    if len(line_coords) >= 2:
-        segment_features.append({
-            'type': 'Feature',
-            'geometry': {'type': 'LineString', 'coordinates': line_coords},
-            'properties': {'codigo': codigo, 'rutaKey': route_key, 'tramo': name_str}
-        })
+    route_keys = []
+    for text in [ref, name]:
+        if text:
+            for part in text.split(';'):
+                k = norm_key(part)
+                if k: route_keys.append(k)
 
-geojson = {'type': 'FeatureCollection', 'features': segment_features}
+    assigned_codigo = None
+    
+    for rkey in route_keys:
+        segs = segments_by_route.get(rkey, [])
+        if not segs: continue
+        
+        if len(segs) == 1:
+            assigned_codigo = segs[0]['codigo']
+            break
+        
+        best_seg = None
+        min_dist = float('inf')
+        for seg in segs:
+            s_nodes = seg['nodes']
+            if len(s_nodes) >= 2:
+                p1 = s_nodes[0][1]
+                p2 = s_nodes[-1][1]
+                d = min(dist_sq(mid_pt, p1), dist_sq(mid_pt, p2))
+                if d < min_dist:
+                    min_dist = d
+                    best_seg = seg
+            elif len(s_nodes) == 1:
+                d = dist_sq(mid_pt, s_nodes[0][1])
+                if d < min_dist:
+                    min_dist = d
+                    best_seg = seg
+                    
+        if best_seg and min_dist < 0.5:
+            assigned_codigo = best_seg['codigo']
+            break
+
+    props = dict(feat.get('properties', {}))
+    if assigned_codigo:
+        props['codigo'] = assigned_codigo
+        matched_count += 1
+
+    clean_features.append({
+        'type': 'Feature',
+        'geometry': geom,
+        'properties': props
+    })
+
+output_geojson = {'type': 'FeatureCollection', 'features': clean_features}
 with open('data/segments_geojson.json', 'w', encoding='utf-8') as f:
-    json.dump(geojson, f, ensure_ascii=False)
+    json.dump(output_geojson, f, ensure_ascii=False)
 
-print(f"Segmentos georreferenciados guardados en data/segments_geojson.json ({len(segment_features)} trazas).")
+print(f"Generado data/segments_geojson.json limpio ({len(clean_features)} trazas reales de OSM, {matched_count} vinculadas a tramos exactos).")
