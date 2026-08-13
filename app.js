@@ -151,6 +151,7 @@ async function fetchVialidadNacionalData() {
 
 /**
  * Parser de datos de Vialidad Nacional (Google Sheet)
+ * Incluye todas las provincias del dataset nacional.
  */
 function parseVialidadNacional(rows) {
   const records = [];
@@ -161,10 +162,14 @@ function parseVialidadNacional(rows) {
     if (!r || r.length === 0) continue;
 
     const rawProv = (r[0] || '').trim();
-    let provNorm = '';
+    if (!rawProv) continue;
+
+    let provNorm = rawProv;
     if (/neuqu[eé]n/i.test(rawProv)) provNorm = 'Neuquén';
     else if (/r[ií]o negro/i.test(rawProv)) provNorm = 'Río Negro';
-    else continue; // Filtrar solo Neuquén y Río Negro
+    else if (/c[oó]rdoba/i.test(rawProv)) provNorm = 'Córdoba';
+    else if (/tucum[aá]n/i.test(rawProv)) provNorm = 'Tucumán';
+    else if (/entre r[ií]os/i.test(rawProv)) provNorm = 'Entre Ríos';
 
     const rutaNum = (r[1] || '').trim();
     const tramoStr = (r[2] || '').trim();
@@ -453,6 +458,29 @@ function updateLastUpdated(tramos) {
     const first = tramos[0];
     el.textContent = `Última actualización: ${first.Fecha || 'Hoy'} ${first.Hora || ''}`;
   }
+}
+
+/**
+ * Pobla el selector #province-select con todas las provincias del dataset.
+ */
+function populateProvinceSelect(tramos) {
+  const select = document.getElementById('province-select');
+  if (!select) return;
+
+  const provincesSet = new Set();
+  tramos.forEach(t => {
+    if (t.Provincia) provincesSet.add(t.Provincia);
+  });
+
+  const sortedProvinces = Array.from(provincesSet).sort((a, b) => a.localeCompare(b, 'es'));
+
+  select.innerHTML = '<option value="">Todas las provincias</option>';
+  sortedProvinces.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    select.appendChild(opt);
+  });
 }
 
 /**
@@ -787,6 +815,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     populateStatusSelect();
+    populateProvinceSelect(tramos);
     populateRouteSelect(tramos);
     updateLastUpdated(tramos);
     updateStats(tramos);
