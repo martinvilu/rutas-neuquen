@@ -1,0 +1,23 @@
+{
+  "name": "rutas-patagonia",
+  "version": "2.0.0",
+  "description": "Estado de rutas de Neuquén, Río Negro y corredores nacionales de la Patagonia",
+  "type": "module",
+  "scripts": {
+    "test:unit": "node --test tests/unit.test.js",
+    "test:data": "python3 -m unittest tests/test_data_integrity.py",
+    "test:e2e": "python3 -m unittest tests/test_e2e.py",
+    "test": "npm run test:unit && npm run test:data && npm run test:e2e"
+  },
+  "keywords": [
+    "rutas",
+    "patagonia",
+    "neuquen",
+    "rio-negro",
+    "vialidad",
+    "leaflet",
+    "gis"
+  ],
+  "author": "martinvilu",
+  "license": "MIT"
+}
