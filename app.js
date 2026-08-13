@@ -5,13 +5,14 @@
 
 // Estado global de la aplicación
 const state = {
+  map: null,
+  geoJsonLayer: null,
+  featureLayerMap: new Map(),
   allTramos: [],
   tramosByRouteKey: new Map(),
   tramosByNumber: new Map(),
-  map: null,
-  geoJsonLayer: null,
-  featureLayerMap: new Map(), // featureIndex -> { layer, tramos, bounds, feature }
-  routeBoundsMap: new Map(),  // routeKey -> LatLngBounds
+  routeBoundsMap: new Map(),
+  activeRouteCode: null,
   filters: {
     search: '',
     province: '',
@@ -392,6 +393,31 @@ async function loadGeoJSONData() {
               }
             }
           });
+
+          // Agrega marcador en la mitad del segmento
+          if (feature.geometry && feature.geometry.type === 'LineString' && feature.geometry.coordinates.length > 0) {
+            const coords = feature.geometry.coordinates;
+            const midIndex = Math.floor(coords.length / 2);
+            const midCoord = coords[midIndex];
+            const status = getHighestSeverityStatus(tramos);
+            const style = getStatusStyle(status);
+            
+            const marker = L.circleMarker([midCoord[1], midCoord[0]], {
+              radius: 6,
+              fillColor: style.color,
+              color: '#000',
+              weight: 2,
+              opacity: 1,
+              fillOpacity: 1
+            }).addTo(state.map);
+            
+            marker.on('click', () => {
+              onRouteItemClick(tramos[0].CodigoTramo, tramos[0]._routeKey);
+            });
+            
+            const popupContent = createPopupContent(feature, tramos);
+            marker.bindPopup(popupContent);
+          }
         }
 
         const popupContent = createPopupContent(feature, tramos);
@@ -722,9 +748,14 @@ function updateMapFeaturesVisibility(tramosFiltrados) {
     // Caso 2: Trazas con información oficial
     const matchesFilter = tramos.some(t => activeCodes.has(t.CodigoTramo));
     if (matchesFilter) {
-      const status = getHighestSeverityStatus(tramos.filter(t => activeCodes.has(t.CodigoTramo)));
-      const style = getStatusStyle(status);
-      layer.setStyle({ opacity: style.opacity, weight: style.weight, color: style.color, dashArray: style.dashArray });
+      if (state.activeRouteCode && tramos.some(t => t.CodigoTramo === state.activeRouteCode)) {
+        layer.setStyle({ weight: 9, opacity: 1, color: '#38bdf8', dashArray: null });
+        if (layer.bringToFront) layer.bringToFront();
+      } else {
+        const status = getHighestSeverityStatus(tramos.filter(t => activeCodes.has(t.CodigoTramo)));
+        const style = getStatusStyle(status);
+        layer.setStyle({ opacity: style.opacity, weight: style.weight, color: style.color, dashArray: style.dashArray });
+      }
     } else {
       // Fuera del filtro activo de búsqueda
       layer.setStyle({ opacity: 0.15, weight: 2, dashArray: '4, 6', color: '#10b981' });
@@ -733,9 +764,13 @@ function updateMapFeaturesVisibility(tramosFiltrados) {
 }
 
 /**
- * Evento al hacer click en tarjeta de tramo.
+ * Evento al hacer click en tarjeta de tramo o marcador.
  */
 function onRouteItemClick(codigoTramo, routeKey) {
+  state.activeRouteCode = codigoTramo;
+  updateURL();
+  applyFilters(); // Re-aplica estilos para que el segmento activo se resalte
+
   const tramo = state.allTramos.find(t => t.CodigoTramo === codigoTramo);
 
   if (routeKey && state.routeBoundsMap.has(routeKey)) {
@@ -814,6 +849,10 @@ function closeModal() {
   if (!modal) return;
   modal.classList.remove('active');
   modal.setAttribute('aria-hidden', 'true');
+
+  state.activeRouteCode = null;
+  updateURL();
+  applyFilters();
 }
 
 function initEventListeners() {
@@ -907,6 +946,12 @@ function updateURL() {
   url.searchParams.set('z', zoom);
   url.searchParams.set('sidebar', isCollapsed ? 'collapsed' : 'open');
 
+  if (state.activeRouteCode) {
+    url.searchParams.set('code', state.activeRouteCode);
+  } else {
+    url.searchParams.delete('code');
+  }
+
   window.history.replaceState({}, '', url);
 }
 
@@ -960,6 +1005,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderRoutesList(tramos);
 
     await loadGeoJSONData();
+
+    // Check code in URL and open modal/highlight if present
+    const urlCode = urlParams.get('code');
+    if (urlCode) {
+       const matchedTramo = tramos.find(t => t.CodigoTramo === urlCode);
+       if (matchedTramo) {
+          onRouteItemClick(matchedTramo.CodigoTramo, matchedTramo._routeKey);
+       }
+    }
 
     console.log('Aplicación fusionada e inicializada con éxito.');
   } catch (err) {
