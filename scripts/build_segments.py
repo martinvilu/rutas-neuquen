@@ -1,0 +1,242 @@
+import json, csv, math, re, os
+
+print("Ejecutando script de georreferenciación de segmentos...")
+
+# Base directories
+os.makedirs('data', exist_ok=True)
+
+# Load OSM routes
+osm_data = {}
+if os.path.exists('data/routes.geojson'):
+    with open('data/routes.geojson', encoding='utf-8') as f:
+        osm_data = json.load(f)
+elif os.path.exists('data/neuquen_routes.geojson'):
+    with open('data/neuquen_routes.geojson', encoding='utf-8') as f:
+        osm_data = json.load(f)
+
+# Load DPV Neuquén tramos
+dpv_tramos = []
+if os.path.exists('data/ParteDiario.csv'):
+    with open('data/ParteDiario.csv', encoding='utf-8-sig', errors='ignore') as f:
+        dpv_tramos = list(csv.DictReader(f))
+
+# Load Vialidad Nacional tramos
+vn_rows = []
+if os.path.exists('data/vialidad_nacional.json'):
+    try:
+        with open('data/vialidad_nacional.json', encoding='utf-8') as f:
+            vn = json.load(f)
+            vn_rows = vn.get('values', [])[2:]
+    except Exception as e:
+        print("Error leyendo vialidad_nacional.json:", e)
+
+# Georeferenced Nodes
+nodes = {
+    'NEUQUEN': [-68.0591, -38.9516],
+    'CENTENARIO': [-68.1328, -38.8315],
+    'VISTA ALEGRE': [-68.1923, -38.7511],
+    'EMP RP 51': [-68.3278, -38.7083],
+    'EL CRUCE': [-68.5134, -38.6011],
+    'AÑELO': [-68.7844, -38.3524],
+    'EMP RP 5': [-69.2150, -37.8920],
+    'LOS RANQUILES': [-69.7810, -37.4520],
+    'CORTADERAS': [-70.0810, -37.4010],
+    'OCTAVIO PICO': [-67.9250, -37.6044],
+    'CRUCERO CATRIEL': [-68.0210, -37.7850],
+    'RINCON DE LOS SAUCES': [-68.9281, -37.3922],
+    'PUESTO HERNANDEZ': [-69.3120, -37.1850],
+    'CHOS MALAL': [-70.2709, -37.3783],
+    'TRICAO MALAL': [-70.3320, -37.0350],
+    'CANCHA HUINGANCO': [-70.5210, -36.9150],
+    'HUINGANCO': [-70.5167, -36.9000],
+    'EL HUECU': [-70.5794, -37.6439],
+    'MALLIN LARGO': [-70.4320, -37.5210],
+    'NAUNAUCO': [-70.3120, -37.4520],
+    'MARIANO MORENO': [-70.0150, -38.7478],
+    'EMP RP 16': [-69.8510, -38.6520],
+    'TRES PIEDRAS': [-69.7510, -38.8120],
+    'PASO DE LOS INDIOS': [-69.5510, -38.9810],
+    'PLAZA HUINCUL': [-69.2306, -38.9344],
+    'CUTRAL CO': [-69.2306, -38.9372],
+    'PICUN LEUFU': [-69.2833, -39.5167],
+    'ZAPALA': [-70.0551, -38.9026],
+    'PRIMEROS PINOS': [-70.6333, -38.8667],
+    'LITRAN': [-71.1000, -38.8833],
+    'ANGOSTURA': [-71.1850, -38.8850],
+    'BATEA MAHUIDA': [-71.2150, -38.8520],
+    'PASO ICALMA': [-71.2667, -38.8333],
+    'MOQUEHUE': [-71.2833, -38.9000],
+    'ÑORQUINCO': [-71.2510, -39.1520],
+    'LOS CRUCEROS': [-71.2210, -38.9150],
+    'COVUNCO CENTRO': [-70.1250, -38.6810],
+    'BAJADA DEL AGRIO': [-70.0833, -38.3500],
+    'RUCA CHOROI': [-71.1850, -39.2210],
+    'ANDACOLLO': [-70.6728, -37.1794],
+    'LAS OVEJAS': [-70.7483, -36.9922],
+    'VARVARCO': [-70.6667, -36.8500],
+    'MANZANO AMARGO': [-70.7833, -36.7500],
+    'EL CHOLAR': [-70.6500, -37.4500],
+    'PICHACHEN': [-71.1444, -37.4475],
+    'LONCOPUE': [-70.6133, -38.0722],
+    'CAVIAHUE': [-71.0500, -37.8800],
+    'COPAHUE': [-71.0970, -37.8180],
+    'LAS LAJAS': [-70.3683, -38.5178],
+    'PASO PINO HACHADO': [-70.8833, -38.6500],
+    'ALUMINE': [-70.9167, -39.2361],
+    'JUNIN DE LOS ANDES': [-71.0694, -39.9504],
+    'SAN MARTIN DE LOS ANDES': [-71.3533, -40.1579],
+    'VILLA LA ANGOSTURA': [-71.6428, -40.7634],
+    'PASO SAMORE': [-71.9420, -40.7150],
+    'VILLA TRAFUL': [-71.4167, -40.4833],
+    'CONFLUENCIA TRAFUL': [-71.1520, -40.5010],
+    'PIEDRA DEL AGUILA': [-70.0767, -40.0461],
+    'ARROYITO': [-68.5833, -39.0833],
+    'PLOTTIER': [-68.2333, -38.9667],
+    'BARILOCHE': [-71.3103, -41.1335],
+    'EL BOLSON': [-71.5167, -41.9667],
+    'VILLA MASCARDI': [-71.5167, -41.3500],
+    'PASO FLORES': [-70.6510, -40.6150],
+    'PILCANIYEU': [-70.7220, -41.1220],
+    'COMALLO': [-70.2667, -41.0333],
+    'INGENIERO JACOBACCI': [-69.5500, -41.3333],
+    'MAQUINCHAO': [-68.7000, -41.2500],
+    'LOS MENUCOS': [-68.1000, -40.8333],
+    'RAMOS MEXIA': [-67.2500, -40.7000],
+    'VALCHETA': [-66.1500, -40.7000],
+    'SAN ANTONIO OESTE': [-64.9500, -40.7333],
+    'SIERRA GRANDE': [-65.3500, -41.6000],
+    'VIEDMA': [-62.9967, -40.8135],
+    'GENERAL CONESA': [-64.4333, -40.1000],
+    'RIO COLORADO': [-64.0833, -38.9833],
+    'CHOELE CHOEL': [-65.6833, -39.2667],
+    'CHIMPAY': [-65.6833, -39.1667],
+    'GENERAL ROCA': [-67.5833, -39.0333],
+    'ALLEN': [-67.8333, -38.9833],
+    'CIPOLLETTI': [-67.9944, -38.9389],
+    'CATRIEL': [-67.8000, -37.8778],
+    'PORTEZUELO GRANDE': [-69.5333, -38.3833],
+    'CHIHUIDOS': [-69.6667, -38.1667],
+    'CATAN LIL': [-70.6167, -39.7500],
+    'RINCONADA': [-70.8333, -39.9167],
+    'LAGO VILLARINO': [-71.5833, -40.4500]
+}
+
+def dist_sq(p1, p2):
+    return (p1[0]-p2[0])**2 + (p1[1]-p2[1])**2
+
+def norm_key(s):
+    return re.sub(r'[^A-Z0-9]', '', str(s).upper())
+
+osm_by_key = {}
+for feat in osm_data.get('features', []):
+    ref = feat.get('properties', {}).get('ref', '')
+    name = feat.get('properties', {}).get('name', '')
+    for text in [ref, name]:
+        if text:
+            for part in text.split(';'):
+                k = norm_key(part)
+                if k:
+                    osm_by_key.setdefault(k, []).append(feat)
+
+segment_features = []
+
+# Process DPV Neuquén
+for tramo in dpv_tramos:
+    codigo = f"DPV-{tramo.get('CodigoTramo')}"
+    num = tramo.get('RutaNumero')
+    prov = tramo.get('RutaProvincial')
+    prefix = 'RP' if prov == '1' else 'RN'
+    route_key = norm_key(f'{prefix}{num}')
+    name_str = tramo.get('RutaTramo', '')
+
+    matched_nodes = []
+    for k, coords in nodes.items():
+        if k in name_str.upper():
+            matched_nodes.append((k, coords))
+
+    line_coords = []
+    osm_feats = osm_by_key.get(route_key, [])
+    if len(matched_nodes) >= 2 and len(osm_feats) > 0:
+        all_pts = []
+        for f in osm_feats:
+            geom = f.get('geometry', {})
+            if geom.get('type') == 'LineString':
+                all_pts.extend(geom.get('coordinates', []))
+        if len(all_pts) >= 2:
+            start_coord = matched_nodes[0][1]
+            end_coord = matched_nodes[-1][1]
+            idx_start = min(range(len(all_pts)), key=lambda i: dist_sq(all_pts[i], start_coord))
+            idx_end = min(range(len(all_pts)), key=lambda i: dist_sq(all_pts[i], end_coord))
+            if idx_start > idx_end:
+                idx_start, idx_end = idx_end, idx_start
+            sliced = all_pts[idx_start:idx_end+1]
+            if len(sliced) >= 2:
+                line_coords = sliced
+
+    if len(line_coords) < 2 and len(matched_nodes) >= 2:
+        line_coords = [p[1] for p in matched_nodes]
+    if len(line_coords) < 2 and len(osm_feats) > 0:
+        geom = osm_feats[0].get('geometry', {})
+        if geom.get('type') == 'LineString':
+            line_coords = geom.get('coordinates', [])
+
+    if len(line_coords) >= 2:
+        segment_features.append({
+            'type': 'Feature',
+            'geometry': {'type': 'LineString', 'coordinates': line_coords},
+            'properties': {'codigo': codigo, 'rutaKey': route_key, 'tramo': name_str}
+        })
+
+# Process Vialidad Nacional
+vn_counter = 1000
+for r in vn_rows:
+    if not r or len(r) < 3: continue
+    codigo = f"VN-{vn_counter}"
+    vn_counter += 1
+    rutaNum = (r[1] if len(r) > 1 else '').strip()
+    name_str = (r[2] if len(r) > 2 else '').strip()
+    route_key = norm_key(f'RN{rutaNum}')
+
+    matched_nodes = []
+    for k, coords in nodes.items():
+        if k in name_str.upper():
+            matched_nodes.append((k, coords))
+
+    line_coords = []
+    osm_feats = osm_by_key.get(route_key, [])
+    if len(matched_nodes) >= 2 and len(osm_feats) > 0:
+        all_pts = []
+        for f in osm_feats:
+            geom = f.get('geometry', {})
+            if geom.get('type') == 'LineString':
+                all_pts.extend(geom.get('coordinates', []))
+        if len(all_pts) >= 2:
+            start_coord = matched_nodes[0][1]
+            end_coord = matched_nodes[-1][1]
+            idx_start = min(range(len(all_pts)), key=lambda i: dist_sq(all_pts[i], start_coord))
+            idx_end = min(range(len(all_pts)), key=lambda i: dist_sq(all_pts[i], end_coord))
+            if idx_start > idx_end:
+                idx_start, idx_end = idx_end, idx_start
+            sliced = all_pts[idx_start:idx_end+1]
+            if len(sliced) >= 2:
+                line_coords = sliced
+
+    if len(line_coords) < 2 and len(matched_nodes) >= 2:
+        line_coords = [p[1] for p in matched_nodes]
+    if len(line_coords) < 2 and len(osm_feats) > 0:
+        geom = osm_feats[0].get('geometry', {})
+        if geom.get('type') == 'LineString':
+            line_coords = geom.get('coordinates', [])
+
+    if len(line_coords) >= 2:
+        segment_features.append({
+            'type': 'Feature',
+            'geometry': {'type': 'LineString', 'coordinates': line_coords},
+            'properties': {'codigo': codigo, 'rutaKey': route_key, 'tramo': name_str}
+        })
+
+geojson = {'type': 'FeatureCollection', 'features': segment_features}
+with open('data/segments_geojson.json', 'w', encoding='utf-8') as f:
+    json.dump(geojson, f, ensure_ascii=False)
+
+print(f"Segmentos georreferenciados guardados en data/segments_geojson.json ({len(segment_features)} trazas).")

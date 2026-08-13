@@ -27,6 +27,11 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Descargar últimos reportes de datos
         run: |
           mkdir -p data
@@ -35,6 +40,10 @@ jobs:
           
           echo "Descargando reporte de Vialidad Nacional..."
           curl -s "https://sheets.googleapis.com/v4/spreadsheets/17AqjqeNvM4nG6cOUsUFKFaKXMiNmztYfzHIxeM9FcXk/values/tablavisible?key=AIzaSyCq2wEEKL9-6RmX-TkW23qJsrmnFHFf5tY&alt=json" > data/vialidad_nacional.json || echo "Fallback a JSON existente"
+
+      - name: Reconstruir segmentos georreferenciados
+        run: |
+          python3 scripts/build_segments.py
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v4

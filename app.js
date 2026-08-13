@@ -275,23 +275,28 @@ function initMap() {
 }
 
 /**
- * Carga la capa GeoJSON data/routes.geojson y la vincula con los datos fusionados.
+ * Carga la capa GeoJSON de segmentos refinados (data/segments_geojson.json) o fallback.
  */
 async function loadGeoJSONData() {
   try {
     let geojsonData = null;
     try {
-      const response = await fetch('data/routes.geojson');
+      const response = await fetch('data/segments_geojson.json');
       if (response.ok) {
         geojsonData = await response.json();
       }
     } catch (e) {
-      console.warn('Fallback a neuquen_routes.geojson');
+      console.warn('Fallback a routes.geojson');
     }
 
     if (!geojsonData) {
-      const response = await fetch('data/neuquen_routes.geojson');
-      geojsonData = await response.json();
+      try {
+        const response = await fetch('data/routes.geojson');
+        geojsonData = await response.json();
+      } catch (e) {
+        const response = await fetch('data/neuquen_routes.geojson');
+        geojsonData = await response.json();
+      }
     }
 
     let featureIdCounter = 0;
@@ -310,14 +315,19 @@ async function loadGeoJSONData() {
         state.featureLayerMap.set(featureId, { layer, tramos, bounds, feature });
 
         if (tramos.length > 0) {
-          const routeKey = tramos[0]._routeKey;
-          if (bounds && bounds.isValid()) {
-            if (!state.routeBoundsMap.has(routeKey)) {
-              state.routeBoundsMap.set(routeKey, L.latLngBounds(bounds.getSouthWest(), bounds.getNorthEast()));
-            } else {
-              state.routeBoundsMap.get(routeKey).extend(bounds);
+          tramos.forEach(t => {
+            const tramoCode = t.CodigoTramo;
+            state.featureLayerMap.set(`code-${tramoCode}`, { layer, tramos, bounds, feature });
+            
+            const routeKey = t._routeKey;
+            if (bounds && bounds.isValid()) {
+              if (!state.routeBoundsMap.has(routeKey)) {
+                state.routeBoundsMap.set(routeKey, L.latLngBounds(bounds.getSouthWest(), bounds.getNorthEast()));
+              } else {
+                state.routeBoundsMap.get(routeKey).extend(bounds);
+              }
             }
-          }
+          });
         }
 
         const popupContent = createPopupContent(feature, tramos);
@@ -338,16 +348,23 @@ async function loadGeoJSONData() {
       }
     }).addTo(state.map);
 
-    console.log(`Capa GeoJSON montada con ${geojsonData.features.length} trazas.`);
+    console.log(`Capa GeoJSON de segmentos montada con ${geojsonData.features.length} trazas.`);
   } catch (err) {
     console.error('Error al cargar la capa GeoJSON:', err);
   }
 }
 
 /**
- * Empareja las trazas del GeoJSON con los tramos por coincidencia de ref o name.
+ * Empareja las trazas del GeoJSON con los tramos.
+ * Primero busca por coincidencia exacta de `codigo` de tramo.
  */
 function findTramosForFeature(feature) {
+  const codigo = feature.properties ? feature.properties.codigo : '';
+  if (codigo) {
+    const match = state.allTramos.filter(t => t.CodigoTramo === codigo);
+    if (match.length > 0) return match;
+  }
+
   const ref = feature.properties ? feature.properties.ref : '';
   const name = feature.properties ? feature.properties.name : '';
 
