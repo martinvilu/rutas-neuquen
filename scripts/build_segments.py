@@ -1,7 +1,7 @@
 import json, csv, re, os, time
 import urllib.request
 
-print("Iniciando build_segments.py con extracción ordenada y resolución de colisiones...")
+print("Iniciando build_segments.py con cobertura total de Vialidad Nacional y Provincial...")
 
 os.makedirs('data', exist_ok=True)
 
@@ -88,16 +88,37 @@ rionegro_nodes = {
     'CATRIEL': [-67.8000, -37.8778], 'CASA DE PIEDRA': [-67.1500, -37.7500], 'GUARDIA MITRE': [-63.7000, -40.4333]
 }
 
-# Nodos Nacionales
+# Nodos Nacionales Completos
 national_nodes = {**neuquen_nodes, **rionegro_nodes}
 national_nodes.update({
-    'COMODORO RIVADAVIA': [-67.4833, -45.8667], 'TRELEW': [-65.3000, -43.2500], 'PUERTO MADRYN': [-65.0333, -42.7667],
+    'COMODORO RIVADAVIA': [-67.4833, -45.8667], 'C. RIVADAVIA': [-67.4833, -45.8667], 'C.RIVADAVIA': [-67.4833, -45.8667],
+    'TRELEW': [-65.3000, -43.2500], 'PUERTO MADRYN': [-65.0333, -42.7667], 'PTO.MADRYN': [-65.0333, -42.7667],
+    'Aº VERDE': [-65.1000, -42.0000], 'ARROYO VERDE': [-65.1000, -42.0000],
+    'GARAYALDE': [-66.6333, -44.6833], 'LTE.STA.CRUZ': [-67.5833, -46.0000], 'LTE. STA. CRUZ': [-67.5833, -46.0000],
     'ESQUEL': [-71.3167, -42.9167], 'TREVELIN': [-71.4667, -43.0833], 'RAWSON': [-65.1000, -43.3000],
-    'GAIMAN': [-65.4833, -43.2833], 'PASO DE INDIOS': [-69.0500, -43.8667], 'TECKA': [-70.8000, -43.4833],
-    'GOBERNADOR COSTA': [-70.5833, -44.0500], 'SARMIENTO': [-69.0833, -45.5833], 'RIO MAYO': [-70.2500, -45.6833],
+    'LAS PLUMAS': [-67.2833, -43.7167], 'LOS ALTARES': [-68.4167, -43.8833],
+    'PASO DE INDIOS': [-69.0500, -43.8667], 'TECKA': [-70.8000, -43.4833],
+    'GOBERNADOR COSTA': [-70.5833, -44.0500], 'GOB.COSTA': [-70.5833, -44.0500],
+    'SARMIENTO': [-69.0833, -45.5833], 'RIO MAYO': [-70.2500, -45.6833], 'RÍO MAYO': [-70.2500, -45.6833],
     'LAGO PUELO': [-71.6000, -42.0667], 'EL HOYO': [-71.5000, -42.1000], 'EPUYEN': [-71.3667, -42.2333],
-    'CHOLILA': [-71.4500, -42.5167], 'ACC.CHOLILA': [-71.4500, -42.5167],
-    'LTE. CON RIO NEGRO': [-71.1800, -40.9800], 'LTE CON RIO NEGRO': [-71.1800, -40.9800]
+    'CHOLILA': [-71.4500, -42.5167], 'ACC.CHOLILA': [-71.4500, -42.5167], 'ACC. A CHOLILA': [-71.4500, -42.5167],
+    'EL MAITEN': [-71.1667, -42.0500], 'EL MAITÉN': [-71.1667, -42.0500], 'EMP. RP 70': [-71.3000, -42.1500],
+    'RINCONADA': [-70.8667, -39.9500], 'LA RINCONADA': [-70.8667, -39.9500], 'CATAN LIL': [-70.6000, -39.4500],
+    'LTE. CON MENDOZA': [-69.9000, -36.8167], 'ARROYO LIMAY CHICO': [-70.9800, -40.5800],
+    'VINCULACION AUTOVIA NORTE': [-68.1500, -38.9300], 'VINCULACIÓN AUTOVÍA NORTE': [-68.1500, -38.9300],
+    'LTE. CON RIO NEGRO': [-68.0200, -38.9600], 'LTE. CON RÍO NEGRO': [-68.0200, -38.9600],
+    'LTE. CON NEUQUEN': [-71.1800, -40.9800], 'LTE. CON NEUQUÉN': [-71.1800, -40.9800],
+    'LTE. CON CHUBUT': [-65.1000, -42.0000], 'LTE CON CHUBUT': [-65.1000, -42.0000],
+    'LÍMITE CON CHUBUT': [-71.1000, -42.0000], 'LIMITE CON CHUBUT': [-71.1000, -42.0000],
+    'LTE. CON LA PAMPA': [-67.8800, -37.5800], 'LTE CON LA PAMPA': [-67.8800, -37.5800],
+    'C. ONELI': [-69.9333, -41.2500], 'POMONA': [-65.6333, -39.4833],
+    'INICIO CIRCUNV': [-71.2500, -41.1300],
+    'ACCESO PUERTO S.A. ESTE': [-64.8800, -40.8100], 'ACCESO SAN ANTONIO OESTE': [-64.9500, -40.7333],
+    'S.A.OESTE': [-64.9500, -40.7333], 'S.A. OESTE': [-64.9500, -40.7333],
+    'GRAL. CONESA': [-64.4333, -40.1000], 'GRAL.CONESA': [-64.4333, -40.1000],
+    'EMP. RN 259': [-71.2500, -43.0500], 'EMP. RN 26': [-70.3000, -45.6000], 'EMP. RN 260': [-70.6000, -45.6000],
+    'EMP. RN 22': [-68.0500, -38.9500], 'EMP.RN 22': [-65.5000, -39.3000], 'EMP. RN 3': [-64.9500, -40.7000],
+    'EMP. RN 40': [-71.3000, -42.2000], 'EMP. RN 23': [-70.6500, -40.6000]
 })
 
 def extract_nodes_in_order(text, node_dict):
@@ -169,7 +190,7 @@ for tramo in vrn_tramos:
             print(f"Ruteado VRN: {codigo} - {name_str}")
         time.sleep(0.2)
 
-# 3. Procesar Vialidad Nacional
+# 3. Procesar Vialidad Nacional (Toda la Patagonia)
 vn_counter = 1000
 for r in vn_rows:
     if not r or len(r) < 3: continue
@@ -187,7 +208,7 @@ for r in vn_rows:
                 'geometry': geom,
                 'properties': {'codigo': codigo, 'name': name_str.upper(), 'provincia': raw_prov or 'Nacional'}
             })
-            print(f"Ruteado VN: {codigo} - {name_str}")
+            print(f"Ruteado VN: {codigo} - {name_str} ({raw_prov})")
         time.sleep(0.2)
 
 output_geojson = {'type': 'FeatureCollection', 'features': features}

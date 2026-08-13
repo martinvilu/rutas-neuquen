@@ -3,6 +3,16 @@
  */
 import { normalizeRouteKey } from './utils.js';
 
+const PATAGONIA_PROVINCES = new Set([
+  'Neuquén',
+  'Río Negro',
+  'Chubut',
+  'Santa Cruz',
+  'La Pampa',
+  'Tierra del Fuego',
+  'Tierra del Fuego, Antártida e Islas del Atlántico Sur'
+]);
+
 /**
  * Parser de CSV de DPV Neuquén (exclusivamente Neuquén)
  */
@@ -64,7 +74,7 @@ export function parseCSV(csvText) {
 }
 
 /**
- * Parser de datos de Vialidad Nacional (Google Sheet)
+ * Parser de datos de Vialidad Nacional (Google Sheet) filtrado a la Patagonia
  */
 export function parseVialidadNacional(rows) {
   const records = [];
@@ -81,9 +91,16 @@ export function parseVialidadNacional(rows) {
     if (/neuqu[eé]n/i.test(rawProv)) provNorm = 'Neuquén';
     else if (/r[ií]o negro/i.test(rawProv)) provNorm = 'Río Negro';
     else if (/chubut/i.test(rawProv)) provNorm = 'Chubut';
-    else if (/c[oó]rdoba/i.test(rawProv)) provNorm = 'Córdoba';
-    else if (/tucum[aá]n/i.test(rawProv)) provNorm = 'Tucumán';
-    else if (/entre r[ií]os/i.test(rawProv)) provNorm = 'Entre Ríos';
+    else if (/santa cruz/i.test(rawProv)) provNorm = 'Santa Cruz';
+    else if (/la pampa/i.test(rawProv)) provNorm = 'La Pampa';
+    else if (/tierra del fuego/i.test(rawProv)) provNorm = 'Tierra del Fuego';
+
+    const codigoTramo = `VN-${idCounter++}`;
+
+    // Filtrar exclusivamente a la región Patagonia para coherencia con el mapa
+    if (!PATAGONIA_PROVINCES.has(provNorm)) {
+      continue;
+    }
 
     const rutaNum = (r[1] || '').trim();
     const tramoStr = (r[2] || '').trim();
@@ -103,7 +120,7 @@ export function parseVialidadNacional(rows) {
     const routeName = `RN ${rutaNum}`;
 
     records.push({
-      CodigoTramo: `VN-${idCounter++}`,
+      CodigoTramo: codigoTramo,
       Provincia: provNorm,
       RutaNumero: rutaNum,
       RutaProvincial: '0',
