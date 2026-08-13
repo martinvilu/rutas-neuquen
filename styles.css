@@ -372,6 +372,38 @@ button, input, select {
   transform: rotate(180deg);
 }
 
+/* Botón flotante para reabrir Sidebar colapsada */
+.sidebar-open-tab {
+  display: none;
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 500;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-md);
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  align-items: center;
+  gap: 0.5rem;
+  transition: var(--transition-fast);
+}
+
+.sidebar-open-tab:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.sidebar.collapsed ~ .sidebar-open-tab {
+  display: flex;
+}
+
 /* Filtros */
 .sidebar-filters {
   padding: 1rem 1.25rem;

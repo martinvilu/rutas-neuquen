@@ -834,6 +834,16 @@ function initEventListeners() {
     });
   }
 
+  const openTab = document.getElementById('sidebar-open-tab');
+  if (openTab && sidebar) {
+    openTab.addEventListener('click', () => {
+      sidebar.classList.remove('collapsed');
+      setTimeout(() => {
+        if (state.map) state.map.invalidateSize();
+      }, 300);
+    });
+  }
+
   const mobileBtn = document.getElementById('mobile-sidebar-open');
   if (mobileBtn && sidebar) {
     mobileBtn.addEventListener('click', () => {
