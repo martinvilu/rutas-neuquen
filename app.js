@@ -215,6 +215,26 @@ function parseVialidadNacional(rows) {
 }
 
 /**
+ * Carga de datos de Vialidad Rionegrina (data/vialidad_rionegrina.json)
+ */
+async function fetchVialidadRionegrinaData() {
+  try {
+    const response = await fetch('data/vialidad_rionegrina.json');
+    if (response.ok) {
+      const records = await response.json();
+      return records.map(r => ({
+        ...r,
+        _routeKey: normalizeRouteKey(r.routeName),
+        _routeNum: r.RutaNumero
+      }));
+    }
+  } catch (err) {
+    console.warn('No se pudo cargar data/vialidad_rionegrina.json:', err);
+  }
+  return [];
+}
+
+/**
  * Devuelve el estilo de línea para la capa vectorial Leaflet por estado:
  * - I (Intransitable): #ef4444, grosor 5.5, línea continua.
  * - TCP (Precaución): #f59e0b, grosor 4.8, línea continua.
@@ -973,15 +993,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     initMap();
     initEventListeners();
 
-    // Cargar ambas fuentes en paralelo
-    const [dpvData, vnData] = await Promise.all([
+    // Cargar las tres fuentes en paralelo
+    const [dpvData, vnData, vrnData] = await Promise.all([
       fetchDPVNeuquenData(),
-      fetchVialidadNacionalData()
+      fetchVialidadNacionalData(),
+      fetchVialidadRionegrinaData()
     ]);
 
-    const tramos = [...dpvData, ...vnData];
+    const tramos = [...dpvData, ...vnData, ...vrnData];
     state.allTramos = tramos;
-    console.log(`Total tramos fusionados: ${tramos.length} (DPV: ${dpvData.length}, VN: ${vnData.length})`);
+    console.log(`Total tramos fusionados: ${tramos.length} (DPV: ${dpvData.length}, VN: ${vnData.length}, VRN: ${vrnData.length})`);
 
     tramos.forEach(t => {
       const key = t._routeKey;

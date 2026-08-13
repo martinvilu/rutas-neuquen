@@ -1,7 +1,7 @@
 import json, csv, re, os, time
 import urllib.request
 
-print("Iniciando build_segments.py con filtrado estricto de RP (Neuquén) y Rutas Nacionales...")
+print("Iniciando build_segments.py con integración de Neuquén, Río Negro y Rutas Nacionales...")
 
 os.makedirs('data', exist_ok=True)
 
@@ -20,6 +20,15 @@ if os.path.exists('data/vialidad_nacional.json'):
             vn_rows = vn.get('values', [])[2:]
     except Exception as e:
         print("Error leyendo vialidad_nacional.json:", e)
+
+# 3. Cargar Vialidad Rionegrina
+vrn_tramos = []
+if os.path.exists('data/vialidad_rionegrina.json'):
+    try:
+        with open('data/vialidad_rionegrina.json', encoding='utf-8') as f:
+            vrn_tramos = json.load(f)
+    except Exception as e:
+        print("Error leyendo vialidad_rionegrina.json:", e)
 
 # Nodos específicos de Neuquén (para DPV)
 neuquen_nodes = {
@@ -48,33 +57,32 @@ neuquen_nodes = {
     'LA PRIMAVERA': [-70.4300, -37.2400]
 }
 
-# Nodos nacionales (para Vialidad Nacional)
-national_nodes = {
-    # Río Negro
-    'BARILOCHE': [-71.3103, -41.1335], 'EL BOLSON': [-71.5167, -41.9667], 'VILLA MASCARDI': [-71.5167, -41.3500],
-    'PASO FLORES': [-70.6510, -40.6150], 'PILCANIYEU': [-70.7220, -41.1220], 'COMALLO': [-70.2667, -41.0333],
-    'INGENIERO JACOBACCI': [-69.5500, -41.3333], 'MAQUINCHAO': [-68.7000, -41.2500], 'LOS MENUCOS': [-68.1000, -40.8333],
-    'RAMOS MEXIA': [-67.2500, -40.7000], 'VALCHETA': [-66.1500, -40.7000], 'SAN ANTONIO OESTE': [-64.9500, -40.7333],
-    'SIERRA GRANDE': [-65.3500, -41.6000], 'VIEDMA': [-62.9967, -40.8135], 'GENERAL CONESA': [-64.4333, -40.1000],
-    'RIO COLORADO': [-64.0833, -38.9833], 'CHOELE CHOEL': [-65.6833, -39.2667], 'CHIMPAY': [-65.6833, -39.1667],
-    'GENERAL ROCA': [-67.5833, -39.0333], 'ALLEN': [-67.8333, -38.9833], 'CIPOLLETTI': [-67.9944, -38.9389],
-    'CATRIEL': [-67.8000, -37.8778],
-    
-    # Chubut
+# Nodos específicos de Río Negro (para VRN y VN)
+rionegro_nodes = {
+    'BARILOCHE': [-71.3103, -41.1335], 'S.C. DE BARILOCHE': [-71.3103, -41.1335], 'EL BOLSON': [-71.5167, -41.9667],
+    'VILLA MASCARDI': [-71.5167, -41.3500], 'PASO FLORES': [-70.6510, -40.6150], 'PILCANIYEU': [-70.7220, -41.1220],
+    'COMALLO': [-70.2667, -41.0333], 'INGENIERO JACOBACCI': [-69.5500, -41.3333], 'ING. JACOBACCI': [-69.5500, -41.3333],
+    'MAQUINCHAO': [-68.7000, -41.2500], 'EL CAIN': [-68.3500, -41.7000], 'EL CAÍN': [-68.3500, -41.7000],
+    'LOS MENUCOS': [-68.1000, -40.8333], 'RAMOS MEXIA': [-67.2500, -40.7000], 'MTRO. RAMOS MEXIA': [-67.2500, -40.7000],
+    'VALCHETA': [-66.1500, -40.7000], 'SAN ANTONIO OESTE': [-64.9500, -40.7333], 'LAS GRUTAS': [-65.0833, -40.8000],
+    'SIERRA GRANDE': [-65.3500, -41.6000], 'PLAYAS DORADAS': [-65.0333, -41.6333], 'VIEDMA': [-62.9967, -40.8135],
+    'EL CONDOR': [-62.8333, -41.0500], 'EL CÓNDOR': [-62.8333, -41.0500], 'LA LOBERA': [-63.1333, -41.1500],
+    'GENERAL CONESA': [-64.4333, -40.1000], 'RIO COLORADO': [-64.0833, -38.9833], 'CHOELE CHOEL': [-65.6833, -39.2667],
+    'CHIMPAY': [-65.6833, -39.1667], 'VILLA REGINA': [-67.0833, -39.1000], 'GENERAL ROCA': [-67.5833, -39.0333],
+    'ALLEN': [-67.8333, -38.9833], 'CIPOLLETTI': [-67.9944, -38.9389], 'CATRIEL': [-67.8000, -37.8778],
+    'CASA DE PIEDRA': [-67.1500, -37.7500], 'GUARDIA MITRE': [-63.7000, -40.4333]
+}
+
+# Nodos nacionales completos
+national_nodes = {**neuquen_nodes, **rionegro_nodes}
+national_nodes.update({
     'COMODORO RIVADAVIA': [-67.4833, -45.8667], 'TRELEW': [-65.3000, -43.2500], 'PUERTO MADRYN': [-65.0333, -42.7667],
     'ESQUEL': [-71.3167, -42.9167], 'TREVELIN': [-71.4667, -43.0833], 'RAWSON': [-65.1000, -43.3000],
     'GAIMAN': [-65.4833, -43.2833], 'PASO DE INDIOS': [-69.0500, -43.8667], 'TECKA': [-70.8000, -43.4833],
     'GOBERNADOR COSTA': [-70.5833, -44.0500], 'SARMIENTO': [-69.0833, -45.5833], 'RIO MAYO': [-70.2500, -45.6833],
     'LAGO PUELO': [-71.6000, -42.0667], 'EL HOYO': [-71.5000, -42.1000], 'EPUYEN': [-71.3667, -42.2333],
-    'CHOLILA': [-71.4500, -42.5167],
-    
-    # Neuquén principales en RN
-    'NEUQUEN': [-68.0591, -38.9516], 'PLOTTIER': [-68.2333, -38.9667], 'ARROYITO': [-68.5833, -39.0833],
-    'ZAPALA': [-70.0551, -38.9026], 'LAS LAJAS': [-70.3683, -38.5178], 'CHOS MALAL': [-70.2709, -37.3783],
-    'PIEDRA DEL AGUILA': [-70.0767, -40.0461], 'JUNIN DE LOS ANDES': [-71.0694, -39.9504],
-    'SAN MARTIN DE LOS ANDES': [-71.3533, -40.1579], 'VILLA LA ANGOSTURA': [-71.6428, -40.7634],
-    'PASO SAMORE': [-71.9420, -40.7150], 'CARDENAL SAMORE': [-71.9420, -40.7150]
-}
+    'CHOLILA': [-71.4500, -42.5167]
+})
 
 def get_osrm_route(coords_list):
     coord_str = ';'.join([f"{c[0]},{c[1]}" for c in coords_list])
@@ -91,7 +99,7 @@ def get_osrm_route(coords_list):
 
 features = []
 
-# Procesar DPV (Exclusivo Neuquén)
+# 1. Procesar DPV (Exclusivo Neuquén)
 for tramo in dpv_tramos:
     codigo = f"DPV-{tramo.get('CodigoTramo')}"
     name_str = tramo.get('RutaTramo', '').upper()
@@ -110,9 +118,30 @@ for tramo in dpv_tramos:
                 'properties': {'codigo': codigo, 'name': name_str}
             })
             print(f"Ruteado DPV: {codigo} - {name_str}")
-        time.sleep(0.3)
+        time.sleep(0.2)
 
-# Procesar Vialidad Nacional
+# 2. Procesar Vialidad Rionegrina (Exclusivo Río Negro)
+for tramo in vrn_tramos:
+    codigo = tramo.get('CodigoTramo')
+    name_str = tramo.get('RutaTramo', '').upper()
+    
+    pts = []
+    for k, coords in rionegro_nodes.items():
+        if k in name_str:
+            pts.append(coords)
+            
+    if len(pts) >= 2:
+        geom = get_osrm_route(pts)
+        if geom:
+            features.append({
+                'type': 'Feature',
+                'geometry': geom,
+                'properties': {'codigo': codigo, 'name': name_str}
+            })
+            print(f"Ruteado VRN: {codigo} - {name_str}")
+        time.sleep(0.2)
+
+# 3. Procesar Vialidad Nacional
 vn_counter = 1000
 for r in vn_rows:
     if not r or len(r) < 3: continue
@@ -134,64 +163,10 @@ for r in vn_rows:
                 'properties': {'codigo': codigo, 'name': name_str}
             })
             print(f"Ruteado VN: {codigo} - {name_str}")
-        time.sleep(0.3)
-
-# Depurar rutas base eliminando RP fuera de Neuquén
-if os.path.exists('data/routes.geojson'):
-    try:
-        neuquen_poly = [
-            [-68.06, -37.58], [-68.00, -38.83], [-68.00, -38.96], [-68.58, -39.08],
-            [-69.28, -39.52], [-70.08, -40.05], [-70.50, -40.50], [-71.15, -40.55],
-            [-71.30, -40.95], [-71.75, -40.80], [-71.95, -40.70], [-71.60, -39.95],
-            [-71.35, -38.85], [-71.15, -38.65], [-71.15, -37.45], [-70.80, -36.70],
-            [-69.80, -36.50], [-68.90, -37.35], [-68.06, -37.58]
-        ]
-
-        def point_in_poly(x, y, poly):
-            n = len(poly)
-            inside = False
-            p1x, p1y = poly[0]
-            for i in range(n + 1):
-                p2x, p2y = poly[i % n]
-                if y > min(p1y, p2y):
-                    if y <= max(p1y, p2y):
-                        if x <= max(p1x, p2x):
-                            if p1y != p2y:
-                                xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                            if p1x == p2x or x <= xinters:
-                                inside = not inside
-                p1x, p1y = p2x, p2y
-            return inside
-
-        with open('data/routes.geojson', encoding='utf-8') as f:
-            base_routes = json.load(f)
-
-        clean_base = []
-        for feat in base_routes.get('features', []):
-            ref = feat.get('properties', {}).get('ref', '')
-            name = feat.get('properties', {}).get('name', '')
-            coords = feat.get('geometry', {}).get('coordinates', [])
-            if not coords: continue
-            lons = [c[0] for c in coords]
-            lats = [c[1] for c in coords]
-            mid_lon = sum(lons) / len(lons)
-            mid_lat = sum(lats) / len(lats)
-            
-            is_rp = 'RP' in ref or 'Ruta Provincial' in name
-            if is_rp:
-                if point_in_poly(mid_lon, mid_lat, neuquen_poly):
-                    clean_base.append(feat)
-            else:
-                clean_base.append(feat)
-
-        with open('data/routes.geojson', 'w', encoding='utf-8') as f:
-            json.dump({'type': 'FeatureCollection', 'features': clean_base}, f, ensure_ascii=False)
-        print(f"data/routes.geojson depurado con {len(clean_base)} trazas.")
-    except Exception as e:
-        print("Error depurando routes.geojson:", e)
+        time.sleep(0.2)
 
 output_geojson = {'type': 'FeatureCollection', 'features': features}
 with open('data/segments_geojson.json', 'w', encoding='utf-8') as f:
     json.dump(output_geojson, f, ensure_ascii=False)
 
-print(f"Generado data/segments_geojson.json con {len(features)} tracks estáticos de OSRM sin ruido ni superposiciones.")
+print(f"Generado data/segments_geojson.json con {len(features)} tracks estáticos de OSRM.")

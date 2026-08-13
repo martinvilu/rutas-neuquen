@@ -2,8 +2,8 @@ name: Actualizar Datos y Desplegar GitHub Pages
 
 on:
   schedule:
-    - cron: '0 * * * *' # Ejecutar cada 1 hora
-  workflow_dispatch:     # Permite ejecución manual desde GitHub
+    - cron: '0 13,18 * * *' # 10:00 AM y 15:00 PM hora Argentina (UTC-3)
+  workflow_dispatch:        # Permite ejecución manual desde GitHub
   push:
     branches:
       - main
@@ -32,7 +32,13 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Descargar últimos reportes de datos
+      - name: Instalar dependencias y Playwright
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+          playwright install chromium --with-deps
+
+      - name: Descargar últimos reportes de datos (Neuquén y Nación)
         run: |
           mkdir -p data
           echo "Descargando ParteDiario.csv de DPV Neuquén..."
@@ -40,6 +46,10 @@ jobs:
           
           echo "Descargando reporte de Vialidad Nacional..."
           curl -s "https://sheets.googleapis.com/v4/spreadsheets/17AqjqeNvM4nG6cOUsUFKFaKXMiNmztYfzHIxeM9FcXk/values/tablavisible?key=AIzaSyCq2wEEKL9-6RmX-TkW23qJsrmnFHFf5tY&alt=json" > data/vialidad_nacional.json || echo "Fallback a JSON existente"
+
+      - name: Extraer reporte de Vialidad Rionegrina (AppSheet)
+        run: |
+          python3 scripts/fetch_rionegro.py || echo "Fallo scraper Rio Negro, usando copia existente"
 
       - name: Reconstruir segmentos georreferenciados
         run: |
