@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Estado actualizado de rutas y caminos de la Provincia del Neuquén. Información oficial de la Dirección Provincial de Vialidad (DPV).">
+  <title>Estado de Rutas - Neuquén</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+
+  <!-- Estilos Principales -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header Principal -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+            <line x1="4" y1="22" x2="4" y2="15"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Estado de Rutas</h1>
+          <p class="subtitle">Dirección Provincial de Vialidad — Neuquén</p>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="live-badge">
+          <span class="pulse-indicator"></span>
+          <span id="last-updated">Cargando datos...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Barra de Estadísticas -->
+    <section class="stats-bar" aria-label="Estadísticas de tramos de ruta">
+      <div class="stat-card stat-card-total">
+        <div class="stat-icon-wrapper">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 3a8 8 0 0 1 8 7.2c0 7.3-8 11.8-8 11.8z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Total Tramos</span>
+          <span id="stat-total" class="stat-value">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card stat-card-normal">
+        <div class="stat-icon-wrapper">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Transitables</span>
+          <span id="stat-normal" class="stat-value">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card stat-card-warning">
+        <div class="stat-icon-wrapper">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Precaución</span>
+          <span id="stat-precaucion" class="stat-value">0</span>
+        </div>
+      </div>
+
+      <div class="stat-card stat-card-danger">
+        <div class="stat-icon-wrapper">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Intransitables</span>
+          <span id="stat-intransitable" class="stat-value">0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Área Principal (Sidebar + Mapa) -->
+    <div class="main-layout">
+      <!-- Panel Lateral / Sidebar -->
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+          <h2>Tramos y Filtros</h2>
+          <button id="sidebar-toggle" class="sidebar-toggle" title="Colapsar o desplegar panel" aria-label="Colapsar o desplegar panel">
+            <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+        </div>
+
+        <div class="sidebar-filters">
+          <div class="search-box">
+            <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="search-input" placeholder="Buscar por localidad, tramo o ruta..." aria-label="Buscar por localidad, tramo o ruta" />
+          </div>
+
+          <div class="filter-controls">
+            <div class="select-wrapper">
+              <select id="route-select" class="filter-select" aria-label="Filtrar por ruta">
+                <option value="">Todas las rutas</option>
+              </select>
+            </div>
+
+            <div class="select-wrapper">
+              <select id="status-select" class="filter-select" aria-label="Filtrar por estado">
+                <option value="">Todos los estados</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lista de Tramos -->
+        <div id="routes-list" class="routes-list" aria-live="polite">
+          <!-- Tramos insertados dinámicamente por JavaScript -->
+        </div>
+      </aside>
+
+      <!-- Botón Flotante para abrir Sidebar en Mobile -->
+      <button id="mobile-sidebar-open" class="mobile-sidebar-open" aria-label="Abrir panel de tramos">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+        <span>Ver lista de tramos</span>
+      </button>
+
+      <!-- Contenedor Principal del Mapa -->
+      <div id="map" class="map-container"></div>
+    </div>
+  </div>
+
+  <!-- Modal de Detalle -->
+  <div id="detail-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-labelledby="modal-title">
+    <div class="modal-container">
+      <header class="modal-header">
+        <div class="modal-title-group">
+          <h2 id="modal-title" class="modal-title">Detalle del Tramo</h2>
+          <span id="modal-status" class="status-badge">---</span>
+        </div>
+        <button id="modal-close" class="modal-close" aria-label="Cerrar modal">&times;</button>
+      </header>
+
+      <div id="modal-details" class="modal-body">
+        <!-- Información detallada del tramo insertada dinámicamente -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- JavaScript de la Aplicación -->
+  <script src="app.js" defer></script>
+</body>
+</html>
