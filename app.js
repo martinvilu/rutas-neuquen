@@ -261,9 +261,13 @@ function getHighestSeverityStatus(tramos) {
   return 'NO_DATA';
 }
 
+// Capas de mapas para modo oscuro y claro
+let darkTileLayer = null;
+let lightTileLayer = null;
+let currentTheme = 'dark';
+
 /**
- * Inicialización del mapa Leaflet en #map.
- * Centro: [-39.5, -67.5] para abarcar Neuquén y Río Negro, Zoom: 6.
+ * Inicialización del mapa Leaflet en #map con capas para modo oscuro y claro.
  */
 function initMap() {
   const map = L.map('map', {
@@ -271,13 +275,49 @@ function initMap() {
     attributionControl: true
   }).setView([-39.5, -67.5], 6);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
     subdomains: 'abcd',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  }).addTo(map);
+  });
+
+  lightTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    subdomains: 'abcd',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  });
+
+  // Cargar tema guardado en localStorage o por defecto 'dark'
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  currentTheme = savedTheme;
+  document.documentElement.setAttribute('data-theme', currentTheme);
+
+  if (currentTheme === 'light') {
+    lightTileLayer.addTo(map);
+  } else {
+    darkTileLayer.addTo(map);
+  }
 
   state.map = map;
+}
+
+/**
+ * Conmuta el tema entre modo claro y oscuro.
+ */
+function toggleTheme() {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', currentTheme);
+  localStorage.setItem('theme', currentTheme);
+
+  if (state.map) {
+    if (currentTheme === 'light') {
+      if (state.map.hasLayer(darkTileLayer)) state.map.removeLayer(darkTileLayer);
+      lightTileLayer.addTo(state.map);
+    } else {
+      if (state.map.hasLayer(lightTileLayer)) state.map.removeLayer(lightTileLayer);
+      darkTileLayer.addTo(state.map);
+    }
+  }
 }
 
 /**
@@ -547,7 +587,34 @@ function populateStatusSelect() {
 }
 
 /**
- * Renderiza el listado de tarjetas en #routes-list.
+ * Resalta en el mapa la traza correspondiente al tramo sobre el que se hace hover en la lista.
+ */
+function highlightMapFeature(codigoTramo) {
+  if (!state.geoJsonLayer) return;
+  state.featureLayerMap.forEach(({ layer, tramos }) => {
+    if (tramos && tramos.some(t => t.CodigoTramo === codigoTramo)) {
+      layer.setStyle({ weight: 9, opacity: 1, color: '#38bdf8' });
+      if (layer.bringToFront) layer.bringToFront();
+    }
+  });
+}
+
+/**
+ * Restaura el estilo original de la traza al quitar el puntero de la tarjeta.
+ */
+function unhighlightMapFeature(codigoTramo) {
+  if (!state.geoJsonLayer) return;
+  state.featureLayerMap.forEach(({ layer, tramos }) => {
+    if (tramos && tramos.some(t => t.CodigoTramo === codigoTramo)) {
+      const status = getHighestSeverityStatus(tramos);
+      const style = getStatusStyle(status);
+      layer.setStyle({ weight: style.weight, opacity: style.opacity, color: style.color, dashArray: style.dashArray });
+    }
+  });
+}
+
+/**
+ * Renderiza el listado de tarjetas en #routes-list con eventos de hover.
  */
 function renderRoutesList(tramos) {
   const container = document.getElementById('routes-list');
@@ -565,7 +632,11 @@ function renderRoutesList(tramos) {
   container.innerHTML = tramos.map(t => {
     const badge = getStatusBadge(t.RutaEstado);
     return `
-      <article class="route-item" onclick="onRouteItemClick('${t.CodigoTramo}', '${t._routeKey}')" data-code="${t.CodigoTramo}">
+      <article class="route-item" 
+               onclick="onRouteItemClick('${t.CodigoTramo}', '${t._routeKey}')" 
+               onmouseenter="highlightMapFeature('${t.CodigoTramo}')" 
+               onmouseleave="unhighlightMapFeature('${t.CodigoTramo}')"
+               data-code="${t.CodigoTramo}">
         <header class="route-item-header">
           <span class="route-name">${t.routeName} <small style="font-size:0.75rem; color:var(--text-secondary);">(${t.Provincia})</small></span>
           ${badge}
@@ -788,6 +859,12 @@ function initEventListeners() {
     }
   });
 
+  // Botón de cambio de tema claro/oscuro
+  const themeToggleBtn = document.getElementById('theme-toggle');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', toggleTheme);
+  }
+
   const searchInput = document.getElementById('search-input');
   const provinceSelect = document.getElementById('province-select');
   const routeSelect = document.getElementById('route-select');
@@ -802,6 +879,9 @@ function initEventListeners() {
 window.onRouteItemClick = onRouteItemClick;
 window.openModalByCode = openModalByCode;
 window.closeModal = closeModal;
+window.highlightMapFeature = highlightMapFeature;
+window.unhighlightMapFeature = unhighlightMapFeature;
+window.toggleTheme = toggleTheme;
 
 /**
  * Inicialización principal: Fusiona DPV Neuquén + Vialidad Nacional
