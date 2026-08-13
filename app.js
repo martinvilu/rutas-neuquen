@@ -37,9 +37,9 @@ function normalizeRouteKey(str) {
  */
 async function fetchDPVNeuquenData() {
   const urls = [
-    'https://w2.dpvneuquen.gov.ar/ParteDiario.csv',
+    'data/ParteDiario.csv',
     'https://api.allorigins.win/raw?url=https://w2.dpvneuquen.gov.ar/ParteDiario.csv',
-    'data/ParteDiario.csv'
+    'https://corsproxy.io/?https://w2.dpvneuquen.gov.ar/ParteDiario.csv'
   ];
 
   for (const url of urls) {
@@ -52,7 +52,7 @@ async function fetchDPVNeuquenData() {
         }
       }
     } catch (err) {
-      console.warn(`Fallback DPV desde ${url} falló:`, err);
+      // Continuar silenciosamente al siguiente fallback
     }
   }
   console.error('No se pudo cargar DPV Neuquén');
@@ -127,9 +127,9 @@ function parseDPVCSV(csvText) {
 async function fetchVialidadNacionalData() {
   const urlApi = 'https://sheets.googleapis.com/v4/spreadsheets/17AqjqeNvM4nG6cOUsUFKFaKXMiNmztYfzHIxeM9FcXk/values/tablavisible?key=AIzaSyCq2wEEKL9-6RmX-TkW23qJsrmnFHFf5tY&alt=json';
   const urls = [
+    'data/vialidad_nacional.json',
     urlApi,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(urlApi)}`,
-    'data/vialidad_nacional.json'
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(urlApi)}`
   ];
 
   for (const url of urls) {
@@ -142,7 +142,7 @@ async function fetchVialidadNacionalData() {
         }
       }
     } catch (err) {
-      console.warn(`Fallback Vialidad Nacional desde ${url} falló:`, err);
+      // Continuar silenciosamente al siguiente fallback
     }
   }
   console.error('No se pudo cargar Vialidad Nacional');
