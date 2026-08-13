@@ -271,10 +271,18 @@ let currentTheme = 'dark';
  * Inicialización del mapa Leaflet en #map con capas para modo oscuro y claro.
  */
 function initMap() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const lat = parseFloat(urlParams.get('lat')) || -39.5;
+  const lng = parseFloat(urlParams.get('lng')) || -67.5;
+  const zoom = parseInt(urlParams.get('z'), 10) || 6;
+
   const map = L.map('map', {
     zoomControl: true,
     attributionControl: true
-  }).setView([-39.5, -67.5], 6);
+  }).setView([lat, lng], zoom);
+
+  map.on('moveend', updateURL);
+  map.on('zoomend', updateURL);
 
   darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
@@ -814,6 +822,7 @@ function initEventListeners() {
   if (toggleBtn && sidebar) {
     toggleBtn.addEventListener('click', () => {
       sidebar.classList.toggle('collapsed');
+      updateURL();
       setTimeout(() => {
         if (state.map) state.map.invalidateSize();
       }, 300);
@@ -824,6 +833,7 @@ function initEventListeners() {
   if (openTab && sidebar) {
     openTab.addEventListener('click', () => {
       sidebar.classList.remove('collapsed');
+      updateURL();
       setTimeout(() => {
         if (state.map) state.map.invalidateSize();
       }, 300);
@@ -834,6 +844,7 @@ function initEventListeners() {
   if (mobileBtn && sidebar) {
     mobileBtn.addEventListener('click', () => {
       sidebar.classList.remove('collapsed');
+      updateURL();
       setTimeout(() => {
         if (state.map) state.map.invalidateSize();
       }, 300);
@@ -881,11 +892,38 @@ window.unhighlightMapFeature = unhighlightMapFeature;
 window.toggleTheme = toggleTheme;
 
 /**
+ * Actualiza la URL con el estado actual del mapa y sidebar
+ */
+function updateURL() {
+  if (!state.map) return;
+  const center = state.map.getCenter();
+  const zoom = state.map.getZoom();
+  const sidebar = document.getElementById('sidebar');
+  const isCollapsed = sidebar ? sidebar.classList.contains('collapsed') : false;
+
+  const url = new URL(window.location);
+  url.searchParams.set('lat', center.lat.toFixed(4));
+  url.searchParams.set('lng', center.lng.toFixed(4));
+  url.searchParams.set('z', zoom);
+  url.searchParams.set('sidebar', isCollapsed ? 'collapsed' : 'open');
+
+  window.history.replaceState({}, '', url);
+}
+
+/**
  * Inicialización principal: Fusiona DPV Neuquén + Vialidad Nacional
  */
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     console.log('Iniciando Estado de Rutas - Neuquén y Río Negro...');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const sidebar = document.getElementById('sidebar');
+    if (urlParams.get('sidebar') === 'collapsed' && sidebar) {
+      sidebar.classList.add('collapsed');
+    } else if (urlParams.get('sidebar') === 'open' && sidebar) {
+      sidebar.classList.remove('collapsed');
+    }
 
     initMap();
     initEventListeners();
