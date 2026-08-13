@@ -1,7 +1,7 @@
 import json, csv, re, os, time
 import urllib.request
 
-print("Iniciando build_segments.py con aislamiento estricto de provincias (Neuquén, Río Negro y Nación)...")
+print("Iniciando build_segments.py con extracción ordenada y resolución de colisiones...")
 
 os.makedirs('data', exist_ok=True)
 
@@ -30,50 +30,65 @@ if os.path.exists('data/vialidad_rionegrina.json'):
     except Exception as e:
         print("Error leyendo vialidad_rionegrina.json:", e)
 
-# Nodos específicos de Neuquén (para DPV)
+# Nodos de Neuquén
 neuquen_nodes = {
     'NEUQUEN': [-68.0591, -38.9516], 'CENTENARIO': [-68.1328, -38.8315], 'VISTA ALEGRE': [-68.1923, -38.7511],
-    'EMP RP 51': [-68.3278, -38.7083], 'EL CRUCE': [-68.5134, -38.6011], 'AÑELO': [-68.7844, -38.3524],
-    'EMP RP 5': [-69.2150, -37.8920], 'LOS RANQUILES': [-69.7810, -37.4520], 'CORTADERAS': [-70.0810, -37.4010],
+    'EMP RP 51': [-68.3278, -38.7083], 'EMP. RP 51': [-68.3278, -38.7083],
+    'EMP RP 8 (EL CRUCE)': [-68.5134, -38.6011], 'EMP. RP 8 (EL CRUCE)': [-68.5134, -38.6011],
+    'EMP. RP 7 (EL CRUCE)': [-68.5134, -38.6011], 'EL CRUCE': [-68.5134, -38.6011],
+    'AÑELO (EMP. RP 17)': [-68.7844, -38.3524], 'AÑELO': [-68.7844, -38.3524],
+    'EMP. RP 5': [-69.2150, -37.8920], 'EMP RP 5': [-69.2150, -37.8920],
+    'LOS RANQUILES': [-69.7810, -37.4520], 'CORTADERAS': [-70.0810, -37.4010],
     'OCTAVIO PICO': [-67.9250, -37.6044], 'CRUCERO CATRIEL': [-68.0210, -37.7850], 'RINCON DE LOS SAUCES': [-68.9281, -37.3922],
     'PUESTO HERNANDEZ': [-69.3120, -37.1850], 'CHOS MALAL': [-70.2709, -37.3783], 'TRICAO MALAL': [-70.3320, -37.0350],
     'CANCHA HUINGANCO': [-70.5210, -36.9150], 'HUINGANCO': [-70.5167, -36.9000], 'EL HUECU': [-70.5794, -37.6439],
     'MALLIN LARGO': [-70.4320, -37.5210], 'NAUNAUCO': [-70.3120, -37.4520], 'MARIANO MORENO': [-70.0150, -38.7478],
-    'EMP RP 16': [-69.8510, -38.6520], 'TRES PIEDRAS': [-69.7510, -38.8120], 'PASO DE LOS INDIOS': [-69.5510, -38.9810],
-    'PLAZA HUINCUL': [-69.2306, -38.9344], 'CUTRAL CO': [-69.2306, -38.9372], 'PICUN LEUFU': [-69.2833, -39.5167],
-    'ZAPALA': [-70.0551, -38.9026], 'PRIMEROS PINOS': [-70.6333, -38.8667], 'LITRAN': [-71.1000, -38.8833],
-    'ANGOSTURA': [-71.1850, -38.8850], 'BATEA MAHUIDA': [-71.2150, -38.8520], 'PASO ICALMA': [-71.2667, -38.8333],
+    'EMP. RP 16': [-69.8510, -38.6520], 'EMP RP 16': [-69.8510, -38.6520],
+    'TRES PIEDRAS': [-69.7510, -38.8120], 'BALSA PASO DE LOS INDIOS': [-69.5510, -38.9810], 'PASO DE LOS INDIOS': [-69.5510, -38.9810],
+    'PLAZA HUINCUL': [-69.2306, -38.9344], 'CUTRAL-CO': [-69.2306, -38.9372], 'CUTRAL CO': [-69.2306, -38.9372],
+    'PICUN LEUFU': [-69.2833, -39.5167], 'ZAPALA': [-70.0551, -38.9026], 'PRIMEROS PINOS': [-70.6333, -38.8667],
+    'LITRAN': [-71.1000, -38.8833], 'LITRÁN': [-71.1000, -38.8833],
+    'ANGOSTURA - GENDARMERIA': [-71.1850, -38.8850], 'ANGOSTURA / GENDARMERIA': [-71.1850, -38.8850],
+    'BATEA MAHUIDA': [-71.2150, -38.8520], 'PASO ICALMA': [-71.2667, -38.8333],
     'MOQUEHUE': [-71.2833, -38.9000], 'ÑORQUINCO': [-71.2510, -39.1520], 'LOS CRUCEROS': [-71.2210, -38.9150],
-    'COVUNCO CENTRO': [-70.1250, -38.6810], 'BAJADA DEL AGRIO': [-70.0833, -38.3500], 'RUCA CHOROI': [-71.1850, -39.2210],
-    'ANDACOLLO': [-70.6728, -37.1794], 'LAS OVEJAS': [-70.7483, -36.9922], 'VARVARCO': [-70.6667, -36.8500],
-    'MANZANO AMARGO': [-70.7833, -36.7500], 'EL CHOLAR': [-70.6500, -37.4500], 'PICHACHEN': [-71.1444, -37.4475],
-    'LONCOPUE': [-70.6133, -38.0722], 'CAVIAHUE': [-71.0500, -37.8800], 'COPAHUE': [-71.0970, -37.8180],
-    'LAS LAJAS': [-70.3683, -38.5178], 'PASO PINO HACHADO': [-70.8833, -38.6500], 'ALUMINE': [-70.9167, -39.2361],
-    'JUNIN DE LOS ANDES': [-71.0694, -39.9504], 'SAN MARTIN DE LOS ANDES': [-71.3533, -40.1579],
-    'VILLA LA ANGOSTURA': [-71.6428, -40.7634], 'PASO SAMORE': [-71.9420, -40.7150], 'CARDENAL SAMORE': [-71.9420, -40.7150],
-    'VILLA TRAFUL': [-71.4167, -40.4833], 'CONFLUENCIA TRAFUL': [-71.1520, -40.5010], 'PIEDRA DEL AGUILA': [-70.0767, -40.0461],
-    'ARROYITO': [-68.5833, -39.0833], 'PLOTTIER': [-68.2333, -38.9667],
-    'LOS MENUCOS': [-70.3800, -37.2800],
-    'LA PRIMAVERA': [-70.4300, -37.2400]
+    'COVUNCO CENTRO': [-70.1250, -38.6810], 'BAJADA DEL AGRIO': [-70.0833, -38.3500],
+    'RUCA CHOROI': [-71.1850, -39.2210], 'ANDACOLLO': [-70.6728, -37.1794], 'LAS OVEJAS': [-70.7483, -36.9922],
+    'VARVARCO': [-70.6667, -36.8500], 'Aº AILINCO': [-70.6800, -36.7800], 'MANZANO AMARGO': [-70.7833, -36.7500],
+    'EL CHOLAR': [-70.6500, -37.4500], 'PICHACHEN': [-71.1444, -37.4475], 'LONCOPUE': [-70.6133, -38.0722],
+    'CAVIAHUE': [-71.0500, -37.8800], 'COPAHUE': [-71.0970, -37.8180],
+    'LAS LAJAS': [-70.3683, -38.5178], 'PASO PINO HACHADO': [-70.8833, -38.6500], 'PINO HACHADO': [-70.8833, -38.6500],
+    'ALUMINE': [-70.9167, -39.2361], 'JUNIN DE LOS ANDES': [-71.0694, -39.9504], 'SAN MARTIN DE LOS ANDES': [-71.3533, -40.1579],
+    # RN 231 y Zona Sur Neuquén
+    'EMP. RN 40 (A 6 KM DE VILLA LA ANGOSTURA)': [-71.6960, -40.7490],
+    'EMP. RN 231': [-71.6960, -40.7490], 'EMP RN 231': [-71.6960, -40.7490],
+    'PASO CARDENAL SAMORE': [-71.9420, -40.7150], 'CARDENAL SAMORE': [-71.9420, -40.7150], 'PASO SAMORE': [-71.9420, -40.7150],
+    'ADUANA': [-71.8600, -40.6980], 'LTE. CON CHILE': [-71.9420, -40.7150],
+    'LAGO VILLARINO': [-71.3200, -40.4500], 'VILLA LA ANGOSTURA': [-71.6428, -40.7634],
+    'EMP. RN 237': [-71.1520, -40.5010], 'EMP RN 237': [-71.1520, -40.5010],
+    'VILLA TRAFUL': [-71.4167, -40.4833], 'CONFLUENCIA TRAFUL': [-71.1520, -40.5010],
+    'PIEDRA DEL AGUILA': [-70.0767, -40.0461], 'ARROYITO': [-68.5833, -39.0833], 'PLOTTIER': [-68.2333, -38.9667],
+    'LOS MENUCOS': [-70.3800, -37.2800], 'LA PRIMAVERA': [-70.4300, -37.2400], 'EL LLANO': [-70.5500, -37.2100],
+    'CAYANTA': [-70.7200, -37.1000], 'BELLA VISTA': [-70.7400, -37.0500]
 }
 
-# Nodos específicos de Río Negro (para VRN y VN)
+# Nodos de Río Negro
 rionegro_nodes = {
-    'BARILOCHE': [-71.3103, -41.1335], 'S.C. DE BARILOCHE': [-71.3103, -41.1335], 'EL BOLSON': [-71.5167, -41.9667],
-    'VILLA MASCARDI': [-71.5167, -41.3500], 'PASO FLORES': [-70.6510, -40.6150], 'PILCANIYEU': [-70.7220, -41.1220],
-    'COMALLO': [-70.2667, -41.0333], 'INGENIERO JACOBACCI': [-69.5500, -41.3333], 'ING. JACOBACCI': [-69.5500, -41.3333],
-    'MAQUINCHAO': [-68.7000, -41.2500], 'EL CAIN': [-68.3500, -41.7000], 'EL CAÍN': [-68.3500, -41.7000],
-    'LOS MENUCOS': [-68.1000, -40.8333], 'RAMOS MEXIA': [-67.2500, -40.7000], 'MTRO. RAMOS MEXIA': [-67.2500, -40.7000],
-    'VALCHETA': [-66.1500, -40.7000], 'SAN ANTONIO OESTE': [-64.9500, -40.7333], 'LAS GRUTAS': [-65.0833, -40.8000],
-    'SIERRA GRANDE': [-65.3500, -41.6000], 'PLAYAS DORADAS': [-65.0333, -41.6333], 'VIEDMA': [-62.9967, -40.8135],
-    'EL CONDOR': [-62.8333, -41.0500], 'EL CÓNDOR': [-62.8333, -41.0500], 'LA LOBERA': [-63.1333, -41.1500],
-    'GENERAL CONESA': [-64.4333, -40.1000], 'RIO COLORADO': [-64.0833, -38.9833], 'CHOELE CHOEL': [-65.6833, -39.2667],
-    'CHIMPAY': [-65.6833, -39.1667], 'VILLA REGINA': [-67.0833, -39.1000], 'GENERAL ROCA': [-67.5833, -39.0333],
-    'ALLEN': [-67.8333, -38.9833], 'CIPOLLETTI': [-67.9944, -38.9389], 'CATRIEL': [-67.8000, -37.8778],
-    'CASA DE PIEDRA': [-67.1500, -37.7500], 'GUARDIA MITRE': [-63.7000, -40.4333]
+    'COLONIA SUIZA': [-71.5100, -41.0900], 'BARILOCHE': [-71.3103, -41.1335], 'S.C. DE BARILOCHE': [-71.3103, -41.1335],
+    'ACCESO AL AEROPUERTO': [-71.1800, -41.1400],
+    'EL BOLSON': [-71.5167, -41.9667], 'VILLA MASCARDI': [-71.5167, -41.3500], 'PASO FLORES': [-70.6510, -40.6150],
+    'PILCANIYEU': [-70.7220, -41.1220], 'COMALLO': [-70.2667, -41.0333], 'INGENIERO JACOBACCI': [-69.5500, -41.3333],
+    'ING. JACOBACCI': [-69.5500, -41.3333], 'MAQUINCHAO': [-68.7000, -41.2500], 'EL CAIN': [-68.3500, -41.7000],
+    'EL CAÍN': [-68.3500, -41.7000], 'LOS MENUCOS': [-68.1000, -40.8333], 'RAMOS MEXIA': [-67.2500, -40.7000],
+    'MTRO. RAMOS MEXIA': [-67.2500, -40.7000], 'VALCHETA': [-66.1500, -40.7000], 'SAN ANTONIO OESTE': [-64.9500, -40.7333],
+    'LAS GRUTAS': [-65.0833, -40.8000], 'SIERRA GRANDE': [-65.3500, -41.6000], 'PLAYAS DORADAS': [-65.0333, -41.6333],
+    'VIEDMA': [-62.9967, -40.8135], 'EL CONDOR': [-62.8333, -41.0500], 'EL CÓNDOR': [-62.8333, -41.0500],
+    'LA LOBERA': [-63.1333, -41.1500], 'GENERAL CONESA': [-64.4333, -40.1000], 'RIO COLORADO': [-64.0833, -38.9833],
+    'CHOELE CHOEL': [-65.6833, -39.2667], 'CHIMPAY': [-65.6833, -39.1667], 'VILLA REGINA': [-67.0833, -39.1000],
+    'GENERAL ROCA': [-67.5833, -39.0333], 'ALLEN': [-67.8333, -38.9833], 'CIPOLLETTI': [-67.9944, -38.9389],
+    'CATRIEL': [-67.8000, -37.8778], 'CASA DE PIEDRA': [-67.1500, -37.7500], 'GUARDIA MITRE': [-63.7000, -40.4333]
 }
 
-# Nodos nacionales completos
+# Nodos Nacionales
 national_nodes = {**neuquen_nodes, **rionegro_nodes}
 national_nodes.update({
     'COMODORO RIVADAVIA': [-67.4833, -45.8667], 'TRELEW': [-65.3000, -43.2500], 'PUERTO MADRYN': [-65.0333, -42.7667],
@@ -81,8 +96,29 @@ national_nodes.update({
     'GAIMAN': [-65.4833, -43.2833], 'PASO DE INDIOS': [-69.0500, -43.8667], 'TECKA': [-70.8000, -43.4833],
     'GOBERNADOR COSTA': [-70.5833, -44.0500], 'SARMIENTO': [-69.0833, -45.5833], 'RIO MAYO': [-70.2500, -45.6833],
     'LAGO PUELO': [-71.6000, -42.0667], 'EL HOYO': [-71.5000, -42.1000], 'EPUYEN': [-71.3667, -42.2333],
-    'CHOLILA': [-71.4500, -42.5167]
+    'CHOLILA': [-71.4500, -42.5167], 'ACC.CHOLILA': [-71.4500, -42.5167],
+    'LTE. CON RIO NEGRO': [-71.1800, -40.9800], 'LTE CON RIO NEGRO': [-71.1800, -40.9800]
 })
+
+def extract_nodes_in_order(text, node_dict):
+    text_upper = text.upper()
+    text_norm = text_upper.replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+    sorted_keys = sorted(node_dict.keys(), key=len, reverse=True)
+    matches = []
+    masked_text = list(text_norm)
+    for k in sorted_keys:
+        k_norm = k.replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        pos = 0
+        while True:
+            current_str = ''.join(masked_text)
+            idx = current_str.find(k_norm, pos)
+            if idx == -1: break
+            matches.append((idx, k_norm, node_dict[k]))
+            for m in range(idx, idx + len(k_norm)):
+                masked_text[m] = '_'
+            pos = idx + len(k_norm)
+    matches.sort(key=lambda x: x[0])
+    return [m[2] for m in matches]
 
 def get_osrm_route(coords_list):
     coord_str = ';'.join([f"{c[0]},{c[1]}" for c in coords_list])
@@ -102,20 +138,16 @@ features = []
 # 1. Procesar DPV (Exclusivo Neuquén)
 for tramo in dpv_tramos:
     codigo = f"DPV-{tramo.get('CodigoTramo')}"
-    name_str = tramo.get('RutaTramo', '').upper()
+    name_str = tramo.get('RutaTramo', '')
     
-    pts = []
-    for k, coords in neuquen_nodes.items():
-        if k in name_str:
-            pts.append(coords)
-    
+    pts = extract_nodes_in_order(name_str, neuquen_nodes)
     if len(pts) >= 2:
         geom = get_osrm_route(pts)
         if geom:
             features.append({
                 'type': 'Feature',
                 'geometry': geom,
-                'properties': {'codigo': codigo, 'name': name_str, 'provincia': 'Neuquén'}
+                'properties': {'codigo': codigo, 'name': name_str.upper(), 'provincia': 'Neuquén'}
             })
             print(f"Ruteado DPV: {codigo} - {name_str}")
         time.sleep(0.2)
@@ -123,20 +155,16 @@ for tramo in dpv_tramos:
 # 2. Procesar Vialidad Rionegrina (Exclusivo Río Negro)
 for tramo in vrn_tramos:
     codigo = tramo.get('CodigoTramo')
-    name_str = tramo.get('RutaTramo', '').upper()
+    name_str = tramo.get('RutaTramo', '')
     
-    pts = []
-    for k, coords in rionegro_nodes.items():
-        if k in name_str:
-            pts.append(coords)
-            
+    pts = extract_nodes_in_order(name_str, rionegro_nodes)
     if len(pts) >= 2:
         geom = get_osrm_route(pts)
         if geom:
             features.append({
                 'type': 'Feature',
                 'geometry': geom,
-                'properties': {'codigo': codigo, 'name': name_str, 'provincia': 'Río Negro'}
+                'properties': {'codigo': codigo, 'name': name_str.upper(), 'provincia': 'Río Negro'}
             })
             print(f"Ruteado VRN: {codigo} - {name_str}")
         time.sleep(0.2)
@@ -147,21 +175,17 @@ for r in vn_rows:
     if not r or len(r) < 3: continue
     codigo = f"VN-{vn_counter}"
     vn_counter += 1
-    name_str = (r[2] if len(r) > 2 else '').strip().upper()
+    name_str = (r[2] if len(r) > 2 else '').strip()
     raw_prov = (r[0] if len(r) > 0 else '').strip()
     
-    pts = []
-    for k, coords in national_nodes.items():
-        if k in name_str:
-            pts.append(coords)
-    
+    pts = extract_nodes_in_order(name_str, national_nodes)
     if len(pts) >= 2:
         geom = get_osrm_route(pts)
         if geom:
             features.append({
                 'type': 'Feature',
                 'geometry': geom,
-                'properties': {'codigo': codigo, 'name': name_str, 'provincia': raw_prov or 'Nacional'}
+                'properties': {'codigo': codigo, 'name': name_str.upper(), 'provincia': raw_prov or 'Nacional'}
             })
             print(f"Ruteado VN: {codigo} - {name_str}")
         time.sleep(0.2)
@@ -170,4 +194,4 @@ output_geojson = {'type': 'FeatureCollection', 'features': features}
 with open('data/segments_geojson.json', 'w', encoding='utf-8') as f:
     json.dump(output_geojson, f, ensure_ascii=False)
 
-print(f"Generado data/segments_geojson.json con {len(features)} tracks estáticos de OSRM con aislamiento de provincia.")
+print(f"Completado: data/segments_geojson.json generado con {len(features)} tracks OSRM precisos.")

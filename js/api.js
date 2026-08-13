@@ -77,29 +77,11 @@ export async function fetchVialidadRionegrinaData() {
 }
 
 /**
- * Carga capas GeoJSON combinadas (base OSM + segmentos OSRM)
+ * Carga la capa GeoJSON de segmentos exactos oficiales
  */
 export async function fetchGeoJSONLayers() {
   const geojsonData = { type: 'FeatureCollection', features: [] };
 
-  // Capa base
-  try {
-    const respBase = await fetch('data/routes.geojson');
-    if (respBase.ok) {
-      const base = await respBase.json();
-      geojsonData.features.push(...base.features);
-    } else {
-      const respNeu = await fetch('data/neuquen_routes.geojson');
-      if (respNeu.ok) {
-        const neu = await respNeu.json();
-        geojsonData.features.push(...neu.features);
-      }
-    }
-  } catch (e) {
-    console.warn('No se pudo cargar la capa base de rutas.');
-  }
-
-  // Capa OSRM segmentos exactos
   try {
     const respSeg = await fetch('data/segments_geojson.json');
     if (respSeg.ok) {
@@ -107,7 +89,7 @@ export async function fetchGeoJSONLayers() {
       geojsonData.features.push(...seg.features);
     }
   } catch (e) {
-    console.warn('No se pudo cargar la capa de segmentos exactos.');
+    console.warn('No se pudo cargar data/segments_geojson.json:', e);
   }
 
   return geojsonData;
