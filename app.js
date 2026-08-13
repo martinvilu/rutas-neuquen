@@ -325,25 +325,34 @@ function toggleTheme() {
  * Carga la capa GeoJSON de segmentos refinados (data/segments_geojson.json) o fallback.
  */
 async function loadGeoJSONData() {
-  try {
-    let geojsonData = null;
+    let geojsonData = { type: 'FeatureCollection', features: [] };
+    
+    // Cargar capa base (todas las rutas)
     try {
-      const response = await fetch('data/segments_geojson.json');
-      if (response.ok) {
-        geojsonData = await response.json();
+      const respBase = await fetch('data/routes.geojson');
+      if (respBase.ok) {
+        const base = await respBase.json();
+        geojsonData.features.push(...base.features);
+      } else {
+        const respNeu = await fetch('data/neuquen_routes.geojson');
+        if (respNeu.ok) {
+          const neu = await respNeu.json();
+          geojsonData.features.push(...neu.features);
+        }
       }
     } catch (e) {
-      console.warn('Fallback a routes.geojson');
+      console.warn('No se pudo cargar la capa base de rutas.');
     }
 
-    if (!geojsonData) {
-      try {
-        const response = await fetch('data/routes.geojson');
-        geojsonData = await response.json();
-      } catch (e) {
-        const response = await fetch('data/neuquen_routes.geojson');
-        geojsonData = await response.json();
+    // Cargar capa OSRM (segmentos exactos)
+    try {
+      const respSeg = await fetch('data/segments_geojson.json');
+      if (respSeg.ok) {
+        const seg = await respSeg.json();
+        geojsonData.features.push(...seg.features);
       }
+    } catch (e) {
+      console.warn('No se pudo cargar la capa de segmentos exactos.');
     }
 
     let featureIdCounter = 0;
@@ -412,34 +421,11 @@ function findTramosForFeature(feature) {
     if (match.length > 0) return match;
   }
 
-  const ref = feature.properties ? feature.properties.ref : '';
+  // Fallback solo para nombres exactos mapeados previamente, ignorar ref general para no agrupar toda la ruta
   const name = feature.properties ? feature.properties.name : '';
-
-  if (ref) {
-    const parts = ref.split(';');
-    for (const part of parts) {
-      const key = normalizeRouteKey(part);
-      if (state.tramosByRouteKey.has(key)) {
-        return state.tramosByRouteKey.get(key);
-      }
-    }
-  }
-
   if (name) {
-    const key = normalizeRouteKey(name);
-    if (state.tramosByRouteKey.has(key)) {
-      return state.tramosByRouteKey.get(key);
-    }
-  }
-
-  if (ref) {
-    const numMatch = ref.match(/\d+/);
-    if (numMatch) {
-      const num = numMatch[0];
-      if (state.tramosByNumber.has(num)) {
-        return state.tramosByNumber.get(num);
-      }
-    }
+    const exactMatches = state.allTramos.filter(t => t.RutaTramo && t.RutaTramo.toUpperCase() === name.toUpperCase());
+    if (exactMatches.length > 0) return exactMatches;
   }
 
   return [];
