@@ -3,9 +3,10 @@
  */
 
 /**
- * Normaliza nombres de rutas para macheo uniforme (ej: 'RP 7' -> 'RP7', 'Ruta 22' -> 'RN22')
+ * Normaliza nombres de rutas para macheo uniforme y aislado por provincia
+ * (ej: 'RP 7', 'Neuquén' -> 'NQN_RP7', 'RP 6', 'Río Negro' -> 'RN_RP6', 'RN 22' -> 'RN22')
  */
-export function normalizeRouteKey(str) {
+export function normalizeRouteKey(str, provincia = '') {
   if (!str) return '';
   let clean = String(str).toUpperCase().trim();
   clean = clean.replace(/RUTA\s+PROVINCIAL\s+/i, 'RP');
@@ -14,12 +15,27 @@ export function normalizeRouteKey(str) {
   clean = clean.replace(/[^A-Z0-9]/g, '');
 
   const m = clean.match(/^(RP|RN|BALSA)?(\d+)/);
+  let baseKey = clean;
   if (m) {
     const prefix = m[1] || 'RP';
     const num = m[2];
-    return `${prefix}${num}`;
+    baseKey = `${prefix}${num}`;
   }
-  return clean;
+
+  // Rutas Nacionales (RN) son corredores federales
+  if (baseKey.startsWith('RN')) {
+    return baseKey;
+  }
+
+  // Rutas Provinciales y Balsas se prefijan con la provincia para evitar colisiones
+  if (provincia) {
+    const provNorm = provincia.toLowerCase();
+    if (provNorm.includes('neuqu')) return `NQN_${baseKey}`;
+    if (provNorm.includes('r') || provNorm.includes('negro')) return `RN_${baseKey}`;
+    if (provNorm.includes('chubut')) return `CHB_${baseKey}`;
+  }
+
+  return baseKey;
 }
 
 /**

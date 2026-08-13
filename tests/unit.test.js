@@ -5,16 +5,21 @@ import { normalizeRouteKey, getStatusStyle, getStatusBadge, getHighestSeveritySt
 import { parseCSV, parseVialidadNacional, parseVialidadRionegrina } from '../js/parsers.js';
 import { filterTramos } from '../js/ui.js';
 
-test('normalizeRouteKey - Normalización de nombres de rutas', () => {
-  assert.equal(normalizeRouteKey('RP 7'), 'RP7');
-  assert.equal(normalizeRouteKey('Ruta Provincial 7'), 'RP7');
-  assert.equal(normalizeRouteKey('RN 22'), 'RN22');
-  assert.equal(normalizeRouteKey('Ruta Nacional 40'), 'RN40');
+test('normalizeRouteKey - Normalización de nombres de rutas con aislamiento de provincia', () => {
+  // Rutas Provinciales con provincia
+  assert.equal(normalizeRouteKey('RP 7', 'Neuquén'), 'NQN_RP7');
+  assert.equal(normalizeRouteKey('Ruta Provincial 7', 'Neuquén'), 'NQN_RP7');
+  assert.equal(normalizeRouteKey('RP 6', 'Río Negro'), 'RN_RP6');
+  assert.equal(normalizeRouteKey('Ruta 5', 'Río Negro'), 'RN_RP5');
+  assert.equal(normalizeRouteKey('RP 71', 'Chubut'), 'CHB_RP71');
+
+  // Rutas Nacionales (independiente de la provincia)
+  assert.equal(normalizeRouteKey('RN 22', 'Neuquén'), 'RN22');
+  assert.equal(normalizeRouteKey('Ruta Nacional 40', 'Río Negro'), 'RN40');
+  assert.equal(normalizeRouteKey('rn 237', 'Neuquén'), 'RN237');
+
+  // Sin provincia
   assert.equal(normalizeRouteKey('RP 65'), 'RP65');
-  assert.equal(normalizeRouteKey('rp 13'), 'RP13');
-  assert.equal(normalizeRouteKey('rn 237'), 'RN237');
-  assert.equal(normalizeRouteKey('Ruta 5'), 'RP5');
-  assert.equal(normalizeRouteKey('Balsa Sauce Blanco'), 'BALSASAUCEBLANCO');
   assert.equal(normalizeRouteKey(''), '');
   assert.equal(normalizeRouteKey(null), '');
 });
@@ -52,7 +57,7 @@ test('getStatusBadge - Generación de tags HTML', () => {
   assert.ok(getStatusBadge('NO_DATA').includes('Sin Información'));
 });
 
-test('parseCSV - Parser de DPV Neuquén', () => {
+test('parseCSV - Parser de DPV Neuquén (aislado en Neuquén)', () => {
   const sampleCSV = `CodigoTramo,RutaNumero,RutaProvincial,RutaTramo,RutaTipo,RutaLongitud,RutaEstado,RutaSeccion,RutaObservacion,Fecha,Hora
 20,2,1,"Chos Malal - Tricao Malal",Ripio,48.5,TCP,"Norte","Transitable con precaución",13/08/2026,08:30
 401,40,0,"Zapala - Las Lajas",Asfalto,58.0,T,"Centro","Calzada despejada",13/08/2026,08:30`;
@@ -65,7 +70,7 @@ test('parseCSV - Parser de DPV Neuquén', () => {
   assert.equal(parsed[0].routeName, 'RP 2');
   assert.equal(parsed[0].RutaEstado, 'TCP');
   assert.equal(parsed[0].Fuente, 'DPV Neuquén');
-  assert.equal(parsed[0]._routeKey, 'RP2');
+  assert.equal(parsed[0]._routeKey, 'NQN_RP2');
 
   assert.equal(parsed[1].CodigoTramo, 'DPV-401');
   assert.equal(parsed[1].routeName, 'RN 40');
@@ -89,17 +94,20 @@ test('parseVialidadNacional - Parser de Google Sheets VN', () => {
   assert.equal(parsed[0].routeName, 'RN 22');
   assert.equal(parsed[0].RutaEstado, 'T');
   assert.equal(parsed[0].Fuente, 'Vialidad Nacional');
+  assert.equal(parsed[0]._routeKey, 'RN22');
 
   assert.equal(parsed[1].Provincia, 'Río Negro');
   assert.equal(parsed[1].routeName, 'RN 23');
   assert.equal(parsed[1].RutaEstado, 'TCP');
+  assert.equal(parsed[1]._routeKey, 'RN23');
 
   assert.equal(parsed[2].Provincia, 'Chubut');
   assert.equal(parsed[2].routeName, 'RN 40');
   assert.equal(parsed[2].RutaEstado, 'I');
+  assert.equal(parsed[2]._routeKey, 'RN40');
 });
 
-test('parseVialidadRionegrina - Parser de JSON de AppSheet', () => {
+test('parseVialidadRionegrina - Parser de JSON de AppSheet (aislado en Río Negro)', () => {
   const sampleVRN = [
     {
       CodigoTramo: 'VRN-1000',
@@ -122,16 +130,16 @@ test('parseVialidadRionegrina - Parser de JSON de AppSheet', () => {
   const parsed = parseVialidadRionegrina(sampleVRN);
   assert.equal(parsed.length, 1);
   assert.equal(parsed[0].CodigoTramo, 'VRN-1000');
-  assert.equal(parsed[0]._routeKey, 'RP5');
+  assert.equal(parsed[0]._routeKey, 'RN_RP5');
   assert.equal(parsed[0].Provincia, 'Río Negro');
 });
 
 test('filterTramos - Filtrado combinado de tramos', () => {
   const data = [
-    { CodigoTramo: '1', Provincia: 'Neuquén', routeName: 'RP 7', RutaEstado: 'T', RutaTramo: 'Añelo', RutaObservacion: 'Normal', Fuente: 'DPV' },
-    { CodigoTramo: '2', Provincia: 'Neuquén', routeName: 'RN 22', RutaEstado: 'TCP', RutaTramo: 'Zapala', RutaObservacion: 'Viento', Fuente: 'VN' },
-    { CodigoTramo: '3', Provincia: 'Río Negro', routeName: 'RP 6', RutaEstado: 'I', RutaTramo: 'General Roca', RutaObservacion: 'Corte', Fuente: 'VRN' },
-    { CodigoTramo: '4', Provincia: 'Chubut', routeName: 'RN 40', RutaEstado: 'TCP', RutaTramo: 'Esquel', RutaObservacion: 'Nieve', Fuente: 'VN' }
+    { CodigoTramo: '1', Provincia: 'Neuquén', routeName: 'RP 7', _routeKey: 'NQN_RP7', RutaEstado: 'T', RutaTramo: 'Añelo', RutaObservacion: 'Normal', Fuente: 'DPV' },
+    { CodigoTramo: '2', Provincia: 'Neuquén', routeName: 'RN 22', _routeKey: 'RN22', RutaEstado: 'TCP', RutaTramo: 'Zapala', RutaObservacion: 'Viento', Fuente: 'VN' },
+    { CodigoTramo: '3', Provincia: 'Río Negro', routeName: 'RP 6', _routeKey: 'RN_RP6', RutaEstado: 'I', RutaTramo: 'General Roca', RutaObservacion: 'Corte', Fuente: 'VRN' },
+    { CodigoTramo: '4', Provincia: 'Chubut', routeName: 'RN 40', _routeKey: 'RN40', RutaEstado: 'TCP', RutaTramo: 'Esquel', RutaObservacion: 'Nieve', Fuente: 'VN' }
   ];
 
   // 1. Sin filtros
@@ -142,7 +150,8 @@ test('filterTramos - Filtrado combinado de tramos', () => {
   assert.equal(filterTramos(data, { province: 'Río Negro' }).length, 1);
 
   // 3. Filtro por ruta
-  assert.equal(filterTramos(data, { route: 'RN 22' }).length, 1);
+  assert.equal(filterTramos(data, { route: 'RN22' }).length, 1);
+  assert.equal(filterTramos(data, { route: 'NQN_RP7' }).length, 1);
 
   // 4. Filtro por estado
   assert.equal(filterTramos(data, { status: 'I' }).length, 1);

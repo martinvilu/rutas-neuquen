@@ -74,8 +74,12 @@ export function findTramosForFeature(feature) {
   }
 
   const name = feature.properties ? feature.properties.name : '';
+  const prov = feature.properties ? feature.properties.provincia : '';
   if (name) {
-    const exactMatches = state.allTramos.filter(t => t.RutaTramo && t.RutaTramo.toUpperCase() === name.toUpperCase());
+    let exactMatches = state.allTramos.filter(t => t.RutaTramo && t.RutaTramo.toUpperCase() === name.toUpperCase());
+    if (prov) {
+      exactMatches = exactMatches.filter(t => t.Provincia === prov);
+    }
     if (exactMatches.length > 0) return exactMatches;
   }
 

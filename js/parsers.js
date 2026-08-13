@@ -4,7 +4,7 @@
 import { normalizeRouteKey } from './utils.js';
 
 /**
- * Parser de CSV de DPV Neuquén
+ * Parser de CSV de DPV Neuquén (exclusivamente Neuquén)
  */
 export function parseCSV(csvText) {
   const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
@@ -55,7 +55,7 @@ export function parseCSV(csvText) {
       Fecha: row.Fecha,
       Hora: row.Hora,
       Fuente: 'DPV Neuquén',
-      _routeKey: normalizeRouteKey(`${prefix}${rutaNumStr}`),
+      _routeKey: normalizeRouteKey(`${prefix}${rutaNumStr}`, 'Neuquén'),
       _routeNum: rutaNumStr
     });
   }
@@ -117,7 +117,7 @@ export function parseVialidadNacional(rows) {
       Fecha: actualizado.split(' ')[0] || 'Hoy',
       Hora: actualizado.split(' ')[1] || '',
       Fuente: 'Vialidad Nacional',
-      _routeKey: normalizeRouteKey(routeName),
+      _routeKey: normalizeRouteKey(routeName, provNorm),
       _routeNum: rutaNum
     });
   }
@@ -126,13 +126,14 @@ export function parseVialidadNacional(rows) {
 }
 
 /**
- * Parser de datos de Vialidad Rionegrina
+ * Parser de datos de Vialidad Rionegrina (exclusivamente Río Negro)
  */
 export function parseVialidadRionegrina(records) {
   if (!Array.isArray(records)) return [];
   return records.map(r => ({
     ...r,
-    _routeKey: normalizeRouteKey(r.routeName),
+    Provincia: 'Río Negro',
+    _routeKey: normalizeRouteKey(r.routeName, 'Río Negro'),
     _routeNum: r.RutaNumero
   }));
 }

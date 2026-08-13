@@ -73,26 +73,39 @@ export function populateProvinceSelect(tramos) {
 }
 
 /**
- * Pobla el selector de rutas
+ * Pobla el selector de rutas (aislado por provincia)
  */
-export function populateRouteSelect(tramos) {
+export function populateRouteSelect(tramos, selectedProvince = '') {
   const select = document.getElementById('route-select');
   if (!select) return;
 
-  const routesSet = new Set();
-  tramos.forEach(t => {
-    if (t.routeName) routesSet.add(t.routeName);
+  const currentSelection = select.value;
+  const filteredTramos = selectedProvince 
+    ? tramos.filter(t => t.Provincia === selectedProvince)
+    : tramos;
+
+  // Map routeKey -> display label
+  const routesMap = new Map();
+  filteredTramos.forEach(t => {
+    if (t._routeKey) {
+      let label = t.routeName;
+      if (!selectedProvince && t.RutaProvincial === '1') {
+        label = `${t.routeName} (${t.Provincia})`;
+      }
+      routesMap.set(t._routeKey, label);
+    }
   });
 
-  const sortedRoutes = Array.from(routesSet).sort((a, b) => {
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  const sortedKeys = Array.from(routesMap.keys()).sort((a, b) => {
+    return routesMap.get(a).localeCompare(routesMap.get(b), undefined, { numeric: true, sensitivity: 'base' });
   });
 
   select.innerHTML = '<option value="">Todas las rutas</option>';
-  sortedRoutes.forEach(r => {
+  sortedKeys.forEach(key => {
     const opt = document.createElement('option');
-    opt.value = r;
-    opt.textContent = r;
+    opt.value = key;
+    opt.textContent = routesMap.get(key);
+    if (key === currentSelection) opt.selected = true;
     select.appendChild(opt);
   });
 }
@@ -153,15 +166,22 @@ export function renderRoutesList(tramos) {
 }
 
 /**
- * Filtrado puro de tramos
+ * Filtrado estricto de tramos por provincia, ruta, estado y texto
  */
 export function filterTramos(tramos, filters) {
   const { search = '', province = '', route = '', status = 'ALL' } = filters;
   const searchVal = search.trim().toLowerCase();
 
   return tramos.filter(t => {
+    // 1. Provincia estricta
     if (province && t.Provincia !== province) return false;
-    if (route && t.routeName !== route) return false;
+
+    // 2. Ruta estricta por _routeKey o routeName
+    if (route) {
+      if (t._routeKey !== route && t.routeName !== route) return false;
+    }
+
+    // 3. Estado
     if (status && status !== 'ALL') {
       if (status === 'T') {
         if (t.RutaEstado === 'I' || t.RutaEstado === 'TCP') return false;
@@ -169,6 +189,8 @@ export function filterTramos(tramos, filters) {
         return false;
       }
     }
+
+    // 4. Búsqueda de texto libre
     if (searchVal) {
       const fullText = `${t.routeName} ${t.Provincia} ${t.RutaTramo} ${t.RutaSeccion} ${t.RutaObservacion} ${t.RutaTipo} ${t.Fuente}`.toLowerCase();
       if (!fullText.includes(searchVal)) return false;
@@ -363,7 +385,12 @@ export function initEventListeners() {
   const statusSelect = document.getElementById('status-select');
 
   if (searchInput) searchInput.addEventListener('input', applyFilters);
-  if (provinceSelect) provinceSelect.addEventListener('change', applyFilters);
+  if (provinceSelect) {
+    provinceSelect.addEventListener('change', () => {
+      populateRouteSelect(state.allTramos, provinceSelect.value);
+      applyFilters();
+    });
+  }
   if (routeSelect) routeSelect.addEventListener('change', applyFilters);
   if (statusSelect) statusSelect.addEventListener('change', applyFilters);
 }

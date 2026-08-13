@@ -1,7 +1,7 @@
 import json, csv, re, os, time
 import urllib.request
 
-print("Iniciando build_segments.py con integración de Neuquén, Río Negro y Rutas Nacionales...")
+print("Iniciando build_segments.py con aislamiento estricto de provincias (Neuquén, Río Negro y Nación)...")
 
 os.makedirs('data', exist_ok=True)
 
@@ -115,7 +115,7 @@ for tramo in dpv_tramos:
             features.append({
                 'type': 'Feature',
                 'geometry': geom,
-                'properties': {'codigo': codigo, 'name': name_str}
+                'properties': {'codigo': codigo, 'name': name_str, 'provincia': 'Neuquén'}
             })
             print(f"Ruteado DPV: {codigo} - {name_str}")
         time.sleep(0.2)
@@ -136,7 +136,7 @@ for tramo in vrn_tramos:
             features.append({
                 'type': 'Feature',
                 'geometry': geom,
-                'properties': {'codigo': codigo, 'name': name_str}
+                'properties': {'codigo': codigo, 'name': name_str, 'provincia': 'Río Negro'}
             })
             print(f"Ruteado VRN: {codigo} - {name_str}")
         time.sleep(0.2)
@@ -148,6 +148,7 @@ for r in vn_rows:
     codigo = f"VN-{vn_counter}"
     vn_counter += 1
     name_str = (r[2] if len(r) > 2 else '').strip().upper()
+    raw_prov = (r[0] if len(r) > 0 else '').strip()
     
     pts = []
     for k, coords in national_nodes.items():
@@ -160,7 +161,7 @@ for r in vn_rows:
             features.append({
                 'type': 'Feature',
                 'geometry': geom,
-                'properties': {'codigo': codigo, 'name': name_str}
+                'properties': {'codigo': codigo, 'name': name_str, 'provincia': raw_prov or 'Nacional'}
             })
             print(f"Ruteado VN: {codigo} - {name_str}")
         time.sleep(0.2)
@@ -169,4 +170,4 @@ output_geojson = {'type': 'FeatureCollection', 'features': features}
 with open('data/segments_geojson.json', 'w', encoding='utf-8') as f:
     json.dump(output_geojson, f, ensure_ascii=False)
 
-print(f"Generado data/segments_geojson.json con {len(features)} tracks estáticos de OSRM.")
+print(f"Generado data/segments_geojson.json con {len(features)} tracks estáticos de OSRM con aislamiento de provincia.")
