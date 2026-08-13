@@ -214,19 +214,22 @@ function parseVialidadNacional(rows) {
 
 /**
  * Devuelve el estilo de línea para la capa vectorial Leaflet por estado:
- * - I (Intransitable): #ef4444, grosor 5.
- * - TCP (Precaución): #f59e0b, grosor 4.5.
- * - T / otros (Normal): #10b981, grosor 4.
+ * - I (Intransitable): #ef4444, grosor 5.5, línea continua.
+ * - TCP (Precaución): #f59e0b, grosor 4.8, línea continua.
+ * - T (Normal / Transitable): #10b981, grosor 4, línea continua.
+ * - NO_DATA / Sin Información: #10b981, grosor 3.5, línea verde punteada.
  */
 function getStatusStyle(status) {
   switch (status) {
     case 'I':
-      return { color: '#ef4444', weight: 5.5, opacity: 0.9 };
+      return { color: '#ef4444', weight: 5.5, opacity: 0.9, dashArray: null };
     case 'TCP':
-      return { color: '#f59e0b', weight: 4.8, opacity: 0.85 };
+      return { color: '#f59e0b', weight: 4.8, opacity: 0.85, dashArray: null };
     case 'T':
+      return { color: '#10b981', weight: 4, opacity: 0.85, dashArray: null };
+    case 'NO_DATA':
     default:
-      return { color: '#10b981', weight: 4, opacity: 0.85 };
+      return { color: '#10b981', weight: 3.5, opacity: 0.8, dashArray: '6, 8' };
   }
 }
 
@@ -240,19 +243,22 @@ function getStatusBadge(status) {
     case 'TCP':
       return '<span class="status-tag warning">Precaución</span>';
     case 'T':
-    default:
       return '<span class="status-tag normal">Normal</span>';
+    case 'NO_DATA':
+    default:
+      return '<span class="status-tag normal" style="opacity: 0.85; border-style: dashed;">Sin Información</span>';
   }
 }
 
 /**
- * Calcula el estado de mayor severidad en un listado de tramos (I > TCP > T).
+ * Calcula el estado de mayor severidad en un listado de tramos (I > TCP > T > NO_DATA).
  */
 function getHighestSeverityStatus(tramos) {
-  if (!tramos || tramos.length === 0) return 'T';
+  if (!tramos || tramos.length === 0) return 'NO_DATA';
   if (tramos.some(t => t.RutaEstado === 'I')) return 'I';
   if (tramos.some(t => t.RutaEstado === 'TCP')) return 'TCP';
-  return 'T';
+  if (tramos.some(t => t.RutaEstado === 'T')) return 'T';
+  return 'NO_DATA';
 }
 
 /**
@@ -631,31 +637,31 @@ function applyFilters() {
 }
 
 /**
- * Actualiza la visibilidad en el mapa.
+ * Actualiza la visibilidad y estilos en el mapa.
+ * Si un tramo no tiene información de transitabilidad, se muestra como línea verde punteada.
  */
 function updateMapFeaturesVisibility(tramosFiltrados) {
   if (!state.geoJsonLayer) return;
 
-  const activeRouteKeys = new Set(tramosFiltrados.map(t => t._routeKey));
   const activeCodes = new Set(tramosFiltrados.map(t => t.CodigoTramo));
 
   state.featureLayerMap.forEach(({ layer, tramos }) => {
-    if (tramos.length === 0) {
-      if (activeRouteKeys.size === state.tramosByRouteKey.size) {
-        layer.setStyle({ opacity: 0.35, weight: 3 });
-      } else {
-        layer.setStyle({ opacity: 0.05, weight: 1 });
-      }
+    // Caso 1: Trazas sin información oficial de transitabilidad -> Línea verde punteada
+    if (!tramos || tramos.length === 0) {
+      const style = getStatusStyle('NO_DATA');
+      layer.setStyle({ opacity: style.opacity, weight: style.weight, color: style.color, dashArray: style.dashArray });
       return;
     }
 
+    // Caso 2: Trazas con información oficial
     const matchesFilter = tramos.some(t => activeCodes.has(t.CodigoTramo));
     if (matchesFilter) {
       const status = getHighestSeverityStatus(tramos.filter(t => activeCodes.has(t.CodigoTramo)));
       const style = getStatusStyle(status);
-      layer.setStyle({ opacity: style.opacity, weight: style.weight, color: style.color });
+      layer.setStyle({ opacity: style.opacity, weight: style.weight, color: style.color, dashArray: style.dashArray });
     } else {
-      layer.setStyle({ opacity: 0.08, weight: 1.5 });
+      // Fuera del filtro activo de búsqueda
+      layer.setStyle({ opacity: 0.15, weight: 2, dashArray: '4, 6', color: '#10b981' });
     }
   });
 }
