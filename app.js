@@ -1,11 +1,6 @@
 /**
- * Estado de Rutas - Neuquén (Dirección Provincial de Vialidad)
+ * Estado de Rutas - Neuquén y Río Negro (DPV & Vialidad Nacional)
  * Aplicación Web Interactiva basada en Leaflet.js y APIs estáticas.
- * 
- * Reglas de diseño y arquitectura:
- * 1. JavaScript Vanilla ES6 limpio, modular y bien comentado.
- * 2. Idioma: Español rioplatense.
- * 3. Biblioteca de mapas: Leaflet.js con basemap oscuro de CartoDB.
  */
 
 // Estado global de la aplicación
@@ -19,6 +14,7 @@ const state = {
   routeBoundsMap: new Map(),  // routeKey -> LatLngBounds
   filters: {
     search: '',
+    province: '',
     route: '',
     status: 'ALL'
   }
@@ -37,13 +33,9 @@ function normalizeRouteKey(str) {
 }
 
 /**
- * 1. Carga de Datos CSV
- * fetchCSVData(): Intenta en orden:
- * 1. Directo: https://w2.dpvneuquen.gov.ar/ParteDiario.csv
- * 2. Proxy CORS: https://api.allorigins.win/raw?url=https://w2.dpvneuquen.gov.ar/ParteDiario.csv
- * 3. Fallback local: data/ParteDiario.csv
+ * Carga de datos DPV Neuquén (CSV)
  */
-async function fetchCSVData() {
+async function fetchDPVNeuquenData() {
   const urls = [
     'https://w2.dpvneuquen.gov.ar/ParteDiario.csv',
     'https://api.allorigins.win/raw?url=https://w2.dpvneuquen.gov.ar/ParteDiario.csv',
@@ -52,29 +44,25 @@ async function fetchCSVData() {
 
   for (const url of urls) {
     try {
-      console.log(`Cargando parte diario CSV desde: ${url}`);
       const response = await fetch(url);
       if (response.ok) {
         const text = await response.text();
         if (text && text.includes('CodigoTramo')) {
-          console.log(`Parte diario CSV cargado con éxito desde: ${url}`);
-          return text;
+          return parseDPVCSV(text);
         }
       }
     } catch (err) {
-      console.warn(`No se pudo cargar el CSV desde ${url}:`, err);
+      console.warn(`Fallback DPV desde ${url} falló:`, err);
     }
   }
-  throw new Error('Imposible obtener el parte diario de rutas desde ninguna de las fuentes configuradas.');
+  console.error('No se pudo cargar DPV Neuquén');
+  return [];
 }
 
 /**
- * parseCSV(csvText): Convierte el texto CSV en un array de objetos con las columnas:
- * CodigoTramo, RutaNumero, RutaProvincial, RutaTramo, RutaTipo, RutaLongitud,
- * RutaEstado, RutaSeccion, RutaObservacion, Fecha, Hora.
- * Formatea el nombre de la ruta: "RP 1" si RutaProvincial === "1", "RN 40" si es "0".
+ * Parser de CSV de DPV Neuquén
  */
-function parseCSV(csvText) {
+function parseDPVCSV(csvText) {
   const lines = csvText.trim().split('\n');
   if (lines.length < 2) return [];
 
@@ -106,15 +94,114 @@ function parseCSV(csvText) {
       row[h] = values[index] !== undefined ? values[index] : '';
     });
 
-    // Formatear nombre de la ruta: "RP 1" si RutaProvincial === "1", "RN 40" si RutaProvincial === "0"
     const isProv = String(row.RutaProvincial).trim() === '1';
     const prefix = isProv ? 'RP' : 'RN';
     const rutaNumStr = String(row.RutaNumero).trim();
-    row.routeName = `${prefix} ${rutaNumStr}`;
-    row._routeKey = normalizeRouteKey(row.routeName);
-    row._routeNum = rutaNumStr;
 
-    records.push(row);
+    records.push({
+      CodigoTramo: `DPV-${row.CodigoTramo}`,
+      Provincia: 'Neuquén',
+      RutaNumero: rutaNumStr,
+      RutaProvincial: isProv ? '1' : '0',
+      routeName: `${prefix} ${rutaNumStr}`,
+      RutaTramo: row.RutaTramo,
+      RutaTipo: row.RutaTipo,
+      RutaLongitud: row.RutaLongitud,
+      RutaEstado: row.RutaEstado || 'T',
+      RutaSeccion: row.RutaSeccion,
+      RutaObservacion: row.RutaObservacion,
+      Fecha: row.Fecha,
+      Hora: row.Hora,
+      Fuente: 'DPV Neuquén',
+      _routeKey: normalizeRouteKey(`${prefix}${rutaNumStr}`),
+      _routeNum: rutaNumStr
+    });
+  }
+
+  return records;
+}
+
+/**
+ * Carga de datos de Vialidad Nacional desde Google Sheets API
+ */
+async function fetchVialidadNacionalData() {
+  const urlApi = 'https://sheets.googleapis.com/v4/spreadsheets/17AqjqeNvM4nG6cOUsUFKFaKXMiNmztYfzHIxeM9FcXk/values/tablavisible?key=AIzaSyCq2wEEKL9-6RmX-TkW23qJsrmnFHFf5tY&alt=json';
+  const urls = [
+    urlApi,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(urlApi)}`,
+    'data/vialidad_nacional.json'
+  ];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        const json = await response.json();
+        if (json && json.values && json.values.length > 2) {
+          return parseVialidadNacional(json.values);
+        }
+      }
+    } catch (err) {
+      console.warn(`Fallback Vialidad Nacional desde ${url} falló:`, err);
+    }
+  }
+  console.error('No se pudo cargar Vialidad Nacional');
+  return [];
+}
+
+/**
+ * Parser de datos de Vialidad Nacional (Google Sheet)
+ */
+function parseVialidadNacional(rows) {
+  const records = [];
+  let idCounter = 1000;
+
+  for (let i = 2; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length === 0) continue;
+
+    const rawProv = (r[0] || '').trim();
+    let provNorm = '';
+    if (/neuqu[eé]n/i.test(rawProv)) provNorm = 'Neuquén';
+    else if (/r[ií]o negro/i.test(rawProv)) provNorm = 'Río Negro';
+    else continue; // Filtrar solo Neuquén y Río Negro
+
+    const rutaNum = (r[1] || '').trim();
+    const tramoStr = (r[2] || '').trim();
+    const estadoRaw = (r[3] || '').toUpperCase();
+    const calzada = (r[4] || '').trim();
+    const extension = (r[5] || '').trim();
+    const obs = (r[7] || '').trim();
+    const actualizado = (r[8] || '').trim();
+
+    // Mapeo de estado a I, TCP, T
+    let estado = 'T';
+    if (estadoRaw.includes('INTRANSITABLE') || estadoRaw.includes('CORTE') || estadoRaw.includes('INTERRUMPIDO')) {
+      estado = 'I';
+    } else if (estadoRaw.includes('RESTRINGIDA') || estadoRaw.includes('PRECAUCIÓN') || estadoRaw.includes('PRECAUCION') || estadoRaw.includes('ALERTA')) {
+      estado = 'TCP';
+    }
+
+    const routeName = `RN ${rutaNum}`;
+
+    records.push({
+      CodigoTramo: `VN-${idCounter++}`,
+      Provincia: provNorm,
+      RutaNumero: rutaNum,
+      RutaProvincial: '0',
+      routeName: routeName,
+      RutaTramo: tramoStr,
+      RutaTipo: calzada,
+      RutaLongitud: extension,
+      RutaEstado: estado,
+      RutaSeccion: '',
+      RutaObservacion: obs,
+      Fecha: actualizado.split(' ')[0] || 'Hoy',
+      Hora: actualizado.split(' ')[1] || '',
+      Fuente: 'Vialidad Nacional',
+      _routeKey: normalizeRouteKey(routeName),
+      _routeNum: rutaNum
+    });
   }
 
   return records;
@@ -129,9 +216,9 @@ function parseCSV(csvText) {
 function getStatusStyle(status) {
   switch (status) {
     case 'I':
-      return { color: '#ef4444', weight: 5, opacity: 0.85 };
+      return { color: '#ef4444', weight: 5.5, opacity: 0.9 };
     case 'TCP':
-      return { color: '#f59e0b', weight: 4.5, opacity: 0.85 };
+      return { color: '#f59e0b', weight: 4.8, opacity: 0.85 };
     case 'T':
     default:
       return { color: '#10b981', weight: 4, opacity: 0.85 };
@@ -165,14 +252,13 @@ function getHighestSeverityStatus(tramos) {
 
 /**
  * Inicialización del mapa Leaflet en #map.
- * Centro: [-38.95, -70.05], Zoom: 7.
- * TileLayer: CartoDB Dark All con atribución OpenStreetMap / CARTO.
+ * Centro: [-39.5, -67.5] para abarcar Neuquén y Río Negro, Zoom: 6.
  */
 function initMap() {
   const map = L.map('map', {
     zoomControl: true,
     attributionControl: true
-  }).setView([-38.95, -70.05], 7);
+  }).setView([-39.5, -67.5], 6);
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
@@ -184,15 +270,24 @@ function initMap() {
 }
 
 /**
- * Carga la capa GeoJSON data/neuquen_routes.geojson y la vincula con los datos del CSV.
+ * Carga la capa GeoJSON data/routes.geojson y la vincula con los datos fusionados.
  */
 async function loadGeoJSONData() {
   try {
-    const response = await fetch('data/neuquen_routes.geojson');
-    if (!response.ok) {
-      throw new Error(`Respuesta HTTP no válida (${response.status}) al obtener GeoJSON`);
+    let geojsonData = null;
+    try {
+      const response = await fetch('data/routes.geojson');
+      if (response.ok) {
+        geojsonData = await response.json();
+      }
+    } catch (e) {
+      console.warn('Fallback a neuquen_routes.geojson');
     }
-    const geojsonData = await response.json();
+
+    if (!geojsonData) {
+      const response = await fetch('data/neuquen_routes.geojson');
+      geojsonData = await response.json();
+    }
 
     let featureIdCounter = 0;
 
@@ -206,7 +301,6 @@ async function loadGeoJSONData() {
         const featureId = featureIdCounter++;
         const tramos = findTramosForFeature(feature);
 
-        // Guardar bounds y asociación para zoom interactivo
         const bounds = layer.getBounds ? layer.getBounds() : null;
         state.featureLayerMap.set(featureId, { layer, tramos, bounds, feature });
 
@@ -221,11 +315,9 @@ async function loadGeoJSONData() {
           }
         }
 
-        // Popup interactivo con información completa
         const popupContent = createPopupContent(feature, tramos);
         layer.bindPopup(popupContent);
 
-        // Efectos al pasar el mouse por encima
         layer.on({
           mouseover: (e) => {
             const l = e.target;
@@ -248,14 +340,12 @@ async function loadGeoJSONData() {
 }
 
 /**
- * Empareja las trazas del GeoJSON con los tramos del CSV por coincidencia de ref o name
- * (ej. RP 7, RN 40, RP7, RN40).
+ * Empareja las trazas del GeoJSON con los tramos por coincidencia de ref o name.
  */
 function findTramosForFeature(feature) {
   const ref = feature.properties ? feature.properties.ref : '';
   const name = feature.properties ? feature.properties.name : '';
 
-  // 1. Coincidencia directa por ref
   if (ref) {
     const parts = ref.split(';');
     for (const part of parts) {
@@ -266,7 +356,6 @@ function findTramosForFeature(feature) {
     }
   }
 
-  // 2. Coincidencia por name
   if (name) {
     const key = normalizeRouteKey(name);
     if (state.tramosByRouteKey.has(key)) {
@@ -274,7 +363,6 @@ function findTramosForFeature(feature) {
     }
   }
 
-  // 3. Fallback por número de ruta (ej. si ref="RP13" pero en el CSV el tramo vino como "RN 13")
   if (ref) {
     const numMatch = ref.match(/\d+/);
     if (numMatch) {
@@ -289,8 +377,7 @@ function findTramosForFeature(feature) {
 }
 
 /**
- * Construye la plantilla HTML para el popup interactivo del mapa.
- * Incluye: badge de estado, número de ruta, tramo, tipo de calzada, observación y fecha/hora.
+ * Plantilla HTML para popup interactivo del mapa.
  */
 function createPopupContent(feature, tramos) {
   const ref = (feature.properties && feature.properties.ref) || 'Ruta';
@@ -302,7 +389,7 @@ function createPopupContent(feature, tramos) {
       <div style="min-width: 200px;">
         <div class="popup-title">${routeName}</div>
         <div style="margin-bottom: 0.5rem;">${getStatusBadge(status)}</div>
-        <p style="font-size: 0.8rem; color: var(--text-secondary);">Sin tramos registrados en el parte diario.</p>
+        <p style="font-size: 0.8rem; color: var(--text-secondary);">Sin tramos registrados en los partes de vialidad.</p>
       </div>
     `;
   }
@@ -313,14 +400,14 @@ function createPopupContent(feature, tramos) {
   return `
     <div style="min-width: 230px; max-width: 290px;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem; gap: 0.5rem;">
-        <span class="popup-title" style="margin-bottom: 0;">${tramo.routeName}</span>
+        <span class="popup-title" style="margin-bottom: 0;">${tramo.routeName} (${tramo.Provincia})</span>
         ${getStatusBadge(tramo.RutaEstado)}
       </div>
       <div class="popup-subtitle">${tramo.RutaTramo}${extraCount}</div>
       <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.4rem; line-height: 1.4;">
         <strong>Calzada:</strong> ${tramo.RutaTipo || 'Sin datos'}<br>
         <strong>Longitud:</strong> ${tramo.RutaLongitud ? tramo.RutaLongitud + ' km' : 'N/I'}<br>
-        <strong>Fecha / Hora:</strong> ${tramo.Fecha} ${tramo.Hora} hs
+        <strong>Fuente:</strong> ${tramo.Fuente} (${tramo.Fecha} ${tramo.Hora})
       </div>
       ${tramo.RutaObservacion ? `<div style="font-size: 0.78rem; color: var(--text-primary); background: var(--bg-dark); padding: 0.45rem; border-radius: 6px; border: 1px solid var(--border-color); max-height: 90px; overflow-y: auto; margin-top: 0.4rem;">${tramo.RutaObservacion}</div>` : ''}
       <button class="popup-btn" onclick="openModalByCode('${tramo.CodigoTramo}')">Ver detalle completo</button>
@@ -329,8 +416,7 @@ function createPopupContent(feature, tramos) {
 }
 
 /**
- * Actualiza los contadores en las tarjetas de estadísticas:
- * #stat-total, #stat-intransitable, #stat-precaucion, #stat-normal.
+ * Actualiza contadores en las tarjetas de estadísticas.
  */
 function updateStats(tramosFiltrados) {
   const total = tramosFiltrados.length;
@@ -345,17 +431,16 @@ function updateStats(tramosFiltrados) {
 }
 
 /**
- * Actualiza el texto #last-updated con la fecha y hora del reporte.
+ * Actualiza fecha/hora del reporte.
  */
 function updateLastUpdated(tramos) {
   const el = document.getElementById('last-updated');
   if (!el || tramos.length === 0) return;
-  const t = tramos[0];
-  el.textContent = `Actualizado: ${t.Fecha} — ${t.Hora} hs`;
+  el.textContent = `Actualizado: Neuquén y Río Negro (${tramos.length} tramos cargados)`;
 }
 
 /**
- * Pobla el selector #route-select con la lista única de rutas presentes en el CSV.
+ * Pobla el selector #route-select.
  */
 function populateRouteSelect(tramos) {
   const select = document.getElementById('route-select');
@@ -380,7 +465,7 @@ function populateRouteSelect(tramos) {
 }
 
 /**
- * Configura las opciones del selector #status-select (ALL, I, TCP, T).
+ * Configura las opciones del selector #status-select.
  */
 function populateStatusSelect() {
   const select = document.getElementById('status-select');
@@ -395,7 +480,7 @@ function populateStatusSelect() {
 }
 
 /**
- * Renderiza el listado de tarjetas en el contenedor #routes-list.
+ * Renderiza el listado de tarjetas en #routes-list.
  */
 function renderRoutesList(tramos) {
   const container = document.getElementById('routes-list');
@@ -415,7 +500,7 @@ function renderRoutesList(tramos) {
     return `
       <article class="route-item" onclick="onRouteItemClick('${t.CodigoTramo}', '${t._routeKey}')" data-code="${t.CodigoTramo}">
         <header class="route-item-header">
-          <span class="route-name">${t.routeName}</span>
+          <span class="route-name">${t.routeName} <small style="font-size:0.75rem; color:var(--text-secondary);">(${t.Provincia})</small></span>
           ${badge}
         </header>
         <div class="route-section-title">${t.RutaTramo}</div>
@@ -423,6 +508,7 @@ function renderRoutesList(tramos) {
         <footer class="route-meta">
           <span>🛣️ ${t.RutaTipo || 'Calzada n/d'}</span>
           <span>📏 ${t.RutaLongitud ? t.RutaLongitud + ' km' : 's/d'}</span>
+          <span style="font-size:0.7rem; color:var(--accent-blue);">${t.Fuente}</span>
         </footer>
       </article>
     `;
@@ -430,27 +516,35 @@ function renderRoutesList(tramos) {
 }
 
 /**
- * Filtrado dinámico por:
- * - Buscador #search-input (búsqueda por texto en localidad, tramo o ruta).
- * - Desplegable #route-select.
- * - Desplegable #status-select (ALL, I, TCP, T).
+ * Aplicar todos los filtros:
+ * - Buscador #search-input
+ * - Provincia #province-select
+ * - Ruta #route-select
+ * - Estado #status-select
  */
 function applyFilters() {
   const searchInput = document.getElementById('search-input');
+  const provinceSelect = document.getElementById('province-select');
   const routeSelect = document.getElementById('route-select');
   const statusSelect = document.getElementById('status-select');
 
   const searchVal = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const provVal = provinceSelect ? provinceSelect.value : '';
   const routeVal = routeSelect ? routeSelect.value : '';
   const statusVal = statusSelect ? statusSelect.value : 'ALL';
 
   const filtered = state.allTramos.filter(t => {
-    // 1. Desplegable por ruta
+    // 1. Provincia
+    if (provVal && t.Provincia !== provVal) {
+      return false;
+    }
+
+    // 2. Ruta
     if (routeVal && t.routeName !== routeVal) {
       return false;
     }
 
-    // 2. Desplegable por estado
+    // 3. Estado
     if (statusVal && statusVal !== 'ALL' && statusVal !== '') {
       if (statusVal === 'T') {
         if (t.RutaEstado === 'I' || t.RutaEstado === 'TCP') return false;
@@ -459,9 +553,9 @@ function applyFilters() {
       }
     }
 
-    // 3. Buscador por texto libre
+    // 4. Texto libre
     if (searchVal) {
-      const fullText = `${t.routeName} ${t.RutaTramo} ${t.RutaSeccion} ${t.RutaObservacion} ${t.RutaTipo}`.toLowerCase();
+      const fullText = `${t.routeName} ${t.Provincia} ${t.RutaTramo} ${t.RutaSeccion} ${t.RutaObservacion} ${t.RutaTipo} ${t.Fuente}`.toLowerCase();
       if (!fullText.includes(searchVal)) {
         return false;
       }
@@ -476,7 +570,7 @@ function applyFilters() {
 }
 
 /**
- * Muestra o atenúa los elementos vectoriales en el mapa según los tramos filtrados.
+ * Actualiza la visibilidad en el mapa.
  */
 function updateMapFeaturesVisibility(tramosFiltrados) {
   if (!state.geoJsonLayer) return;
@@ -506,13 +600,11 @@ function updateMapFeaturesVisibility(tramosFiltrados) {
 }
 
 /**
- * Evento al hacer click en una tarjeta de la lista #routes-list:
- * Centra el mapa en la ruta y despliega el modal del tramo.
+ * Evento al hacer click en tarjeta de tramo.
  */
 function onRouteItemClick(codigoTramo, routeKey) {
   const tramo = state.allTramos.find(t => t.CodigoTramo === codigoTramo);
 
-  // Centrar mapa si se cuenta con los límites de la ruta
   if (routeKey && state.routeBoundsMap.has(routeKey)) {
     const bounds = state.routeBoundsMap.get(routeKey);
     if (bounds && bounds.isValid()) {
@@ -520,15 +612,11 @@ function onRouteItemClick(codigoTramo, routeKey) {
     }
   }
 
-  // Abrir modal de detalles
   if (tramo) {
     openModal(tramo);
   }
 }
 
-/**
- * Función expuesta globalmente para abrir el modal desde botones en Popups HTML.
- */
 function openModalByCode(codigoTramo) {
   const tramo = state.allTramos.find(t => t.CodigoTramo === String(codigoTramo));
   if (tramo) {
@@ -536,9 +624,6 @@ function openModalByCode(codigoTramo) {
   }
 }
 
-/**
- * Despliega el modal #detail-modal con los datos de un tramo.
- */
 function openModal(tramo) {
   const modal = document.getElementById('detail-modal');
   const title = document.getElementById('modal-title');
@@ -547,11 +632,15 @@ function openModal(tramo) {
 
   if (!modal || !title || !statusBadge || !detailsBody) return;
 
-  title.textContent = `${tramo.routeName} — ${tramo.RutaTramo}`;
+  title.textContent = `${tramo.routeName} (${tramo.Provincia}) — ${tramo.RutaTramo}`;
   statusBadge.innerHTML = getStatusBadge(tramo.RutaEstado);
 
   detailsBody.innerHTML = `
     <div class="detail-grid">
+      <div class="detail-row">
+        <span class="detail-label">Provincia / Fuente</span>
+        <span class="detail-value">${tramo.Provincia} (${tramo.Fuente})</span>
+      </div>
       <div class="detail-row">
         <span class="detail-label">Código de Tramo</span>
         <span class="detail-value">${tramo.CodigoTramo}</span>
@@ -566,7 +655,7 @@ function openModal(tramo) {
       </div>
       <div class="detail-row">
         <span class="detail-label">Fecha y Hora</span>
-        <span class="detail-value">${tramo.Fecha} — ${tramo.Hora} hs</span>
+        <span class="detail-value">${tramo.Fecha} ${tramo.Hora}</span>
       </div>
     </div>
 
@@ -578,7 +667,7 @@ function openModal(tramo) {
     ` : ''}
 
     <div class="observations-box">
-      <span class="detail-label">Observaciones del Parte Diario</span>
+      <span class="detail-label">Observaciones del Parte Oficial</span>
       <p class="detail-value" style="margin-top: 0.35rem; line-height: 1.5;">${tramo.RutaObservacion || 'Sin observaciones registradas para este tramo.'}</p>
     </div>
   `;
@@ -587,9 +676,6 @@ function openModal(tramo) {
   modal.setAttribute('aria-hidden', 'false');
 }
 
-/**
- * Cierra el modal #detail-modal.
- */
 function closeModal() {
   const modal = document.getElementById('detail-modal');
   if (!modal) return;
@@ -597,11 +683,7 @@ function closeModal() {
   modal.setAttribute('aria-hidden', 'true');
 }
 
-/**
- * Inicializa los manejadores de eventos DOM para sidebar, filtros y modal.
- */
 function initEventListeners() {
-  // Desplegar / colapsar #sidebar con #sidebar-toggle
   const sidebar = document.getElementById('sidebar');
   const toggleBtn = document.getElementById('sidebar-toggle');
   if (toggleBtn && sidebar) {
@@ -613,7 +695,6 @@ function initEventListeners() {
     });
   }
 
-  // Abrir sidebar en dispositivos móviles
   const mobileBtn = document.getElementById('mobile-sidebar-open');
   if (mobileBtn && sidebar) {
     mobileBtn.addEventListener('click', () => {
@@ -624,7 +705,6 @@ function initEventListeners() {
     });
   }
 
-  // Cerrar modal #detail-modal
   const modalCloseBtn = document.getElementById('modal-close');
   const modal = document.getElementById('detail-modal');
   if (modalCloseBtn) {
@@ -641,40 +721,41 @@ function initEventListeners() {
     }
   });
 
-  // Eventos de filtros dinámicos
   const searchInput = document.getElementById('search-input');
+  const provinceSelect = document.getElementById('province-select');
   const routeSelect = document.getElementById('route-select');
   const statusSelect = document.getElementById('status-select');
 
   if (searchInput) searchInput.addEventListener('input', applyFilters);
+  if (provinceSelect) provinceSelect.addEventListener('change', applyFilters);
   if (routeSelect) routeSelect.addEventListener('change', applyFilters);
   if (statusSelect) statusSelect.addEventListener('change', applyFilters);
 }
 
-// Exponer manejadores globales en el objeto window
 window.onRouteItemClick = onRouteItemClick;
 window.openModalByCode = openModalByCode;
 window.closeModal = closeModal;
 
 /**
- * Punto de entrada principal de la aplicación.
+ * Inicialización principal: Fusiona DPV Neuquén + Vialidad Nacional
  */
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    console.log('Iniciando Estado de Rutas Neuquén...');
+    console.log('Iniciando Estado de Rutas - Neuquén y Río Negro...');
 
-    // 1. Inicializar mapa Leaflet
     initMap();
-
-    // 2. Escuchadores de eventos de la interfaz
     initEventListeners();
 
-    // 3. Cargar y parsear datos del CSV
-    const csvText = await fetchCSVData();
-    const tramos = parseCSV(csvText);
-    state.allTramos = tramos;
+    // Cargar ambas fuentes en paralelo
+    const [dpvData, vnData] = await Promise.all([
+      fetchDPVNeuquenData(),
+      fetchVialidadNacionalData()
+    ]);
 
-    // Agrupar tramos en Maps para búsqueda eficiente
+    const tramos = [...dpvData, ...vnData];
+    state.allTramos = tramos;
+    console.log(`Total tramos fusionados: ${tramos.length} (DPV: ${dpvData.length}, VN: ${vnData.length})`);
+
     tramos.forEach(t => {
       const key = t._routeKey;
       if (!state.tramosByRouteKey.has(key)) {
@@ -689,27 +770,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.tramosByNumber.get(num).push(t);
     });
 
-    // 4. Poblar controles e indicadores de UI
     populateStatusSelect();
     populateRouteSelect(tramos);
     updateLastUpdated(tramos);
     updateStats(tramos);
     renderRoutesList(tramos);
 
-    // 5. Cargar capa GeoJSON
     await loadGeoJSONData();
 
-    console.log('Aplicación cargada e inicializada con éxito.');
+    console.log('Aplicación fusionada e inicializada con éxito.');
   } catch (err) {
     console.error('Error durante la inicialización:', err);
-    const routesList = document.getElementById('routes-list');
-    if (routesList) {
-      routesList.innerHTML = `
-        <div class="routes-empty" style="color: var(--status-danger);">
-          <p>⚠️ No se pudieron obtener los datos de vialidad.</p>
-          <p style="font-size: 0.8rem; margin-top: 0.5rem;">${err.message}</p>
-        </div>
-      `;
-    }
   }
 });

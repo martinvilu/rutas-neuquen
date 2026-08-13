@@ -1,0 +1,49 @@
+name: Actualizar Datos y Desplegar GitHub Pages
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Ejecutar cada 1 hora
+  workflow_dispatch:     # Permite ejecución manual desde GitHub
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  fetch-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Descargar últimos reportes de datos
+        run: |
+          mkdir -p data
+          echo "Descargando ParteDiario.csv de DPV Neuquén..."
+          curl -s -k "https://w2.dpvneuquen.gov.ar/ParteDiario.csv" > data/ParteDiario.csv || echo "Fallback a CSV existente"
+          
+          echo "Descargando reporte de Vialidad Nacional..."
+          curl -s "https://sheets.googleapis.com/v4/spreadsheets/17AqjqeNvM4nG6cOUsUFKFaKXMiNmztYfzHIxeM9FcXk/values/tablavisible?key=AIzaSyCq2wEEKL9-6RmX-TkW23qJsrmnFHFf5tY&alt=json" > data/vialidad_nacional.json || echo "Fallback a JSON existente"
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Subir artefacto para GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Desplegar a GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
