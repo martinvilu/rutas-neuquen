@@ -1,10 +1,10 @@
 import json, csv, re, os
 
-print("Ejecutando script de georreferenciación limpia de segmentos...")
+print("Ejecutando script optimizado de georreferenciación de segmentos (sin ruido)...")
 
 os.makedirs('data', exist_ok=True)
 
-# 1. Cargar trazas físicas reales de OSM desde data/routes.geojson o neuquen_routes.geojson
+# 1. Cargar trazas reales de OSM
 osm_data = {}
 if os.path.exists('data/routes.geojson'):
     with open('data/routes.geojson', encoding='utf-8') as f:
@@ -13,13 +13,13 @@ elif os.path.exists('data/neuquen_routes.geojson'):
     with open('data/neuquen_routes.geojson', encoding='utf-8') as f:
         osm_data = json.load(f)
 
-# 2. Cargar reportes de DPV Neuquén
+# 2. Cargar DPV Neuquén
 dpv_tramos = []
 if os.path.exists('data/ParteDiario.csv'):
     with open('data/ParteDiario.csv', encoding='utf-8-sig', errors='ignore') as f:
         dpv_tramos = list(csv.DictReader(f))
 
-# 3. Cargar reportes de Vialidad Nacional
+# 3. Cargar Vialidad Nacional
 vn_rows = []
 if os.path.exists('data/vialidad_nacional.json'):
     try:
@@ -29,8 +29,9 @@ if os.path.exists('data/vialidad_nacional.json'):
     except Exception as e:
         print("Error leyendo vialidad_nacional.json:", e)
 
-# Diccionario de coordenadas de nodos principales (lon, lat)
+# Diccionario ampliado de nodos (Neuquén + Río Negro + Chubut)
 nodes = {
+    # Neuquén
     'NEUQUEN': [-68.0591, -38.9516],
     'CENTENARIO': [-68.1328, -38.8315],
     'VISTA ALEGRE': [-68.1923, -38.7511],
@@ -91,6 +92,8 @@ nodes = {
     'PIEDRA DEL AGUILA': [-70.0767, -40.0461],
     'ARROYITO': [-68.5833, -39.0833],
     'PLOTTIER': [-68.2333, -38.9667],
+    
+    # Río Negro
     'BARILOCHE': [-71.3103, -41.1335],
     'EL BOLSON': [-71.5167, -41.9667],
     'VILLA MASCARDI': [-71.5167, -41.3500],
@@ -113,11 +116,24 @@ nodes = {
     'ALLEN': [-67.8333, -38.9833],
     'CIPOLLETTI': [-67.9944, -38.9389],
     'CATRIEL': [-67.8000, -37.8778],
-    'PORTEZUELO GRANDE': [-69.5333, -38.3833],
-    'CHIHUIDOS': [-69.6667, -38.1667],
-    'CATAN LIL': [-70.6167, -39.7500],
-    'RINCONADA': [-70.8333, -39.9167],
-    'LAGO VILLARINO': [-71.5833, -40.4500]
+
+    # Chubut
+    'COMODORO RIVADAVIA': [-67.4833, -45.8667],
+    'TRELEW': [-65.3000, -43.2500],
+    'PUERTO MADRYN': [-65.0333, -42.7667],
+    'ESQUEL': [-71.3167, -42.9167],
+    'TREVELIN': [-71.4667, -43.0833],
+    'RAWSON': [-65.1000, -43.3000],
+    'GAIMAN': [-65.4833, -43.2833],
+    'PASO DE INDIOS CHUBUT': [-69.0500, -43.8667],
+    'TECKA': [-70.8000, -43.4833],
+    'GOBERNADOR COSTA': [-70.5833, -44.0500],
+    'SARMIENTO': [-69.0833, -45.5833],
+    'RIO MAYO': [-70.2500, -45.6833],
+    'LAGO PUELO': [-71.6000, -42.0667],
+    'EL HOYO': [-71.5000, -42.1000],
+    'EPUYEN': [-71.3667, -42.2333],
+    'CHOLILA': [-71.4500, -42.5167]
 }
 
 def dist_sq(p1, p2):
@@ -126,7 +142,7 @@ def dist_sq(p1, p2):
 def norm_key(s):
     return re.sub(r'[^A-Z0-9]', '', str(s).upper())
 
-# Indexar tramos por clave de ruta
+# Indexar tramos oficiales por clave de ruta
 segments_by_route = {}
 
 for tramo in dpv_tramos:
@@ -168,7 +184,7 @@ for r in vn_rows:
         'nodes': pts
     })
 
-# Procesar cada LineString real de OSM sin concatenar puntos lejanos
+# Filtrado de ruido: Solo mantener vías principales con coincidencia o pertenencia a corredores oficiales
 clean_features = []
 matched_count = 0
 
@@ -180,6 +196,12 @@ for feat in osm_data.get('features', []):
     coords = geom.get('coordinates', [])
     if len(coords) < 2:
         continue
+
+    # Filtrar vías extremadamente cortas que suelen ser rampas o stubs ruidosos
+    if len(coords) < 3:
+        p1, p2 = coords[0], coords[-1]
+        if dist_sq(p1, p2) < 0.00001: # < ~300 metros
+            continue
     
     mid_idx = len(coords) // 2
     mid_pt = coords[mid_idx]
@@ -193,6 +215,10 @@ for feat in osm_data.get('features', []):
             for part in text.split(';'):
                 k = norm_key(part)
                 if k: route_keys.append(k)
+
+    # Si no tiene ref o nombre de ruta reconocido, descartar para evitar ruido en el mapa
+    if not route_keys:
+        continue
 
     assigned_codigo = None
     
@@ -240,4 +266,4 @@ output_geojson = {'type': 'FeatureCollection', 'features': clean_features}
 with open('data/segments_geojson.json', 'w', encoding='utf-8') as f:
     json.dump(output_geojson, f, ensure_ascii=False)
 
-print(f"Generado data/segments_geojson.json limpio ({len(clean_features)} trazas reales de OSM, {matched_count} vinculadas a tramos exactos).")
+print(f"Generado data/segments_geojson.json depurado ({len(clean_features)} trazas sin ruido, {matched_count} vinculadas a tramos oficiales).")

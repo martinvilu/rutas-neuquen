@@ -167,6 +167,7 @@ function parseVialidadNacional(rows) {
     let provNorm = rawProv;
     if (/neuqu[eé]n/i.test(rawProv)) provNorm = 'Neuquén';
     else if (/r[ií]o negro/i.test(rawProv)) provNorm = 'Río Negro';
+    else if (/chubut/i.test(rawProv)) provNorm = 'Chubut';
     else if (/c[oó]rdoba/i.test(rawProv)) provNorm = 'Córdoba';
     else if (/tucum[aá]n/i.test(rawProv)) provNorm = 'Tucumán';
     else if (/entre r[ií]os/i.test(rawProv)) provNorm = 'Entre Ríos';
@@ -217,7 +218,7 @@ function parseVialidadNacional(rows) {
  * - I (Intransitable): #ef4444, grosor 5.5, línea continua.
  * - TCP (Precaución): #f59e0b, grosor 4.8, línea continua.
  * - T (Normal / Transitable): #10b981, grosor 4, línea continua.
- * - NO_DATA / Sin Información: #10b981, grosor 3.5, línea verde punteada.
+ * - NO_DATA / Sin Información: #10b981, grosor 2.2, opacidad 0.45, línea verde punteada suave (sin ruido visual).
  */
 function getStatusStyle(status) {
   switch (status) {
@@ -229,7 +230,7 @@ function getStatusStyle(status) {
       return { color: '#10b981', weight: 4, opacity: 0.85, dashArray: null };
     case 'NO_DATA':
     default:
-      return { color: '#10b981', weight: 3.5, opacity: 0.8, dashArray: '6, 8' };
+      return { color: '#10b981', weight: 2.2, opacity: 0.45, dashArray: '4, 8' };
   }
 }
 
