@@ -1,7 +1,7 @@
 import json, csv, re, os, time
 import urllib.request
 
-print("Iniciando generación de tracks estáticos vía OSRM...")
+print("Iniciando generación de tracks estáticos depurados vía OSRM (Neuquén + Rutas Nacionales)...")
 
 os.makedirs('data', exist_ok=True)
 
@@ -21,9 +21,8 @@ if os.path.exists('data/vialidad_nacional.json'):
     except Exception as e:
         print("Error leyendo vialidad_nacional.json:", e)
 
-# Diccionario de coordenadas
-nodes = {
-    # Neuquén
+# Nodos específicos de Neuquén (para DPV)
+neuquen_nodes = {
     'NEUQUEN': [-68.0591, -38.9516], 'CENTENARIO': [-68.1328, -38.8315], 'VISTA ALEGRE': [-68.1923, -38.7511],
     'EMP RP 51': [-68.3278, -38.7083], 'EL CRUCE': [-68.5134, -38.6011], 'AÑELO': [-68.7844, -38.3524],
     'EMP RP 5': [-69.2150, -37.8920], 'LOS RANQUILES': [-69.7810, -37.4520], 'CORTADERAS': [-70.0810, -37.4010],
@@ -45,7 +44,13 @@ nodes = {
     'VILLA LA ANGOSTURA': [-71.6428, -40.7634], 'PASO SAMORE': [-71.9420, -40.7150], 'CARDENAL SAMORE': [-71.9420, -40.7150],
     'VILLA TRAFUL': [-71.4167, -40.4833], 'CONFLUENCIA TRAFUL': [-71.1520, -40.5010], 'PIEDRA DEL AGUILA': [-70.0767, -40.0461],
     'ARROYITO': [-68.5833, -39.0833], 'PLOTTIER': [-68.2333, -38.9667],
-    
+    # Los Menucos y parajes locales del norte neuquino
+    'LOS MENUCOS': [-70.3800, -37.2800],
+    'LA PRIMAVERA': [-70.4300, -37.2400]
+}
+
+# Nodos nacionales (para Vialidad Nacional)
+national_nodes = {
     # Río Negro
     'BARILOCHE': [-71.3103, -41.1335], 'EL BOLSON': [-71.5167, -41.9667], 'VILLA MASCARDI': [-71.5167, -41.3500],
     'PASO FLORES': [-70.6510, -40.6150], 'PILCANIYEU': [-70.7220, -41.1220], 'COMALLO': [-70.2667, -41.0333],
@@ -59,14 +64,20 @@ nodes = {
     # Chubut
     'COMODORO RIVADAVIA': [-67.4833, -45.8667], 'TRELEW': [-65.3000, -43.2500], 'PUERTO MADRYN': [-65.0333, -42.7667],
     'ESQUEL': [-71.3167, -42.9167], 'TREVELIN': [-71.4667, -43.0833], 'RAWSON': [-65.1000, -43.3000],
-    'GAIMAN': [-65.4833, -43.2833], 'PASO DE INDIOS CHUBUT': [-69.0500, -43.8667], 'TECKA': [-70.8000, -43.4833],
+    'GAIMAN': [-65.4833, -43.2833], 'PASO DE INDIOS': [-69.0500, -43.8667], 'TECKA': [-70.8000, -43.4833],
     'GOBERNADOR COSTA': [-70.5833, -44.0500], 'SARMIENTO': [-69.0833, -45.5833], 'RIO MAYO': [-70.2500, -45.6833],
     'LAGO PUELO': [-71.6000, -42.0667], 'EL HOYO': [-71.5000, -42.1000], 'EPUYEN': [-71.3667, -42.2333],
-    'CHOLILA': [-71.4500, -42.5167]
+    'CHOLILA': [-71.4500, -42.5167],
+    
+    # Neuquén principales en RN
+    'NEUQUEN': [-68.0591, -38.9516], 'PLOTTIER': [-68.2333, -38.9667], 'ARROYITO': [-68.5833, -39.0833],
+    'ZAPALA': [-70.0551, -38.9026], 'LAS LAJAS': [-70.3683, -38.5178], 'CHOS MALAL': [-70.2709, -37.3783],
+    'PIEDRA DEL AGUILA': [-70.0767, -40.0461], 'JUNIN DE LOS ANDES': [-71.0694, -39.9504],
+    'SAN MARTIN DE LOS ANDES': [-71.3533, -40.1579], 'VILLA LA ANGOSTURA': [-71.6428, -40.7634],
+    'PASO SAMORE': [-71.9420, -40.7150], 'CARDENAL SAMORE': [-71.9420, -40.7150]
 }
 
 def get_osrm_route(coords_list):
-    # coords_list is a list of [lon, lat]
     coord_str = ';'.join([f"{c[0]},{c[1]}" for c in coords_list])
     url = f"http://router.project-osrm.org/route/v1/driving/{coord_str}?overview=full&geometries=geojson"
     req = urllib.request.Request(url, headers={'User-Agent': 'PatagoniaRoutesApp/1.0'})
@@ -81,13 +92,13 @@ def get_osrm_route(coords_list):
 
 features = []
 
-# Procesar DPV
+# Procesar DPV (Exclusivo Neuquén)
 for tramo in dpv_tramos:
     codigo = f"DPV-{tramo.get('CodigoTramo')}"
     name_str = tramo.get('RutaTramo', '').upper()
     
     pts = []
-    for k, coords in nodes.items():
+    for k, coords in neuquen_nodes.items():
         if k in name_str:
             pts.append(coords)
     
@@ -99,8 +110,8 @@ for tramo in dpv_tramos:
                 'geometry': geom,
                 'properties': {'codigo': codigo, 'name': name_str}
             })
-            print(f"Ruteado: {codigo} - {name_str}")
-        time.sleep(0.5)
+            print(f"Ruteado DPV: {codigo} - {name_str}")
+        time.sleep(0.3)
 
 # Procesar Vialidad Nacional
 vn_counter = 1000
@@ -111,7 +122,7 @@ for r in vn_rows:
     name_str = (r[2] if len(r) > 2 else '').strip().upper()
     
     pts = []
-    for k, coords in nodes.items():
+    for k, coords in national_nodes.items():
         if k in name_str:
             pts.append(coords)
     
@@ -123,11 +134,11 @@ for r in vn_rows:
                 'geometry': geom,
                 'properties': {'codigo': codigo, 'name': name_str}
             })
-            print(f"Ruteado: {codigo} - {name_str}")
-        time.sleep(0.5)
+            print(f"Ruteado VN: {codigo} - {name_str}")
+        time.sleep(0.3)
 
 output_geojson = {'type': 'FeatureCollection', 'features': features}
 with open('data/segments_geojson.json', 'w', encoding='utf-8') as f:
     json.dump(output_geojson, f, ensure_ascii=False)
 
-print(f"Generado data/segments_geojson.json con {len(features)} tracks estáticos de OSRM sin ruido.")
+print(f"Generado data/segments_geojson.json con {len(features)} tracks estáticos de OSRM sin ruido ni superposiciones.")
