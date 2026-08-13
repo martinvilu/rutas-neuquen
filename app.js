@@ -354,6 +354,7 @@ function toggleTheme() {
  * Carga la capa GeoJSON de segmentos refinados (data/segments_geojson.json) o fallback.
  */
 async function loadGeoJSONData() {
+  try {
     let geojsonData = { type: 'FeatureCollection', features: [] };
     
     // Cargar capa base (todas las rutas)
